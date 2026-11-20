@@ -1,0 +1,6 @@
+# Seulement sur ton ordinateur, pour générer le portrait ASCII
+-r requirements.txt
+pillow
+numpy
+opencv-python
+rembg[cpu]
