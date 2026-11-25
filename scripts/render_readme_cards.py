@@ -357,10 +357,11 @@ def activity(data):
         bh = max(4, round(m["total"] / top * maxh))
         x = x0 + i * (bw + gap)
         fill = "url(#barR)" if is_best else "url(#barG)"
+        glow = ' filter="url(#glowR)"' if is_best else ""
         label = MOIS[int(m["month"][5:7]) - 1]
         bars.append(
             f'<rect class="g" style="animation-delay:{2.2 + i * 0.07:.2f}s" x="{x:.1f}" y="{base - bh}" '
-            f'width="{bw:.1f}" height="{bh}" rx="5" fill="{fill}"{' filter="url(#glowR)"' if is_best else ""}><title>{label}: {m["total"]:,}</title></rect>'
+            f'width="{bw:.1f}" height="{bh}" rx="5" fill="{fill}"{glow}><title>{label}: {m["total"]:,}</title></rect>'
             f'<text class="f" style="animation-delay:{2.2 + i * 0.07:.2f}s" x="{x + bw / 2:.1f}" y="{base + 22}" '
             f'text-anchor="middle" font-family="{MONO}" font-size="11" fill="{MQ_SOFT}">{label}</text>'
         )
