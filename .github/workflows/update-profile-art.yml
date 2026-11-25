@@ -20,9 +20,8 @@ jobs:
           python-version: "3.11"
       - run: pip install -r scripts/requirements.txt
       - run: python scripts/fetch_contributions.py
-      - run: python scripts/generate_streak_svg.py
-      - run: python scripts/render_stats_svg.py
+      - run: python scripts/render_readme_cards.py
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Mise à jour du profil [skip ci]"
-          file_pattern: "data/contributions.json contrib-heatmap.svg stats.svg"
+          file_pattern: "data/contributions.json cards/*.svg"

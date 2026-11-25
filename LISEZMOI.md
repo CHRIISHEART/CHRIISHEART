@@ -1,22 +1,17 @@
-# Profil GitHub animé (style terminal) : mode d'emploi
+# Profil GitHub animé : mode d'emploi
 
-Le profil (`README.md`) affiche 3 images SVG animées :
+Toutes les cartes de `README.md` sont des SVG animés dans `cards/`, dessinés par
+`scripts/render_readme_cards.py`. Le workflow `.github/workflows/update-profile-art.yml`
+récupère tes contributions et redessine les cartes chaque jour.
 
-| Fichier | Contenu | Script |
-|---|---|---|
-| `contrib-heatmap.svg` | calendrier de contributions vert | `scripts/generate_streak_svg.py` |
-| `chris-ascii.svg` | portrait ASCII dans un terminal | `scripts/make_ascii_svg.py` |
-| `stats.svg` | séries, totaux et barres par mois | `scripts/render_stats_svg.py` |
+## Modifier les textes
 
-Le workflow `.github/workflows/update-profile-art.yml` récupère tes contributions et
-redessine le calendrier et les stats chaque jour.
-
-## Tout régénérer à la main
+Tout est dans `scripts/render_readme_cards.py` : les 3 tuiles
+(en bas du fichier, `tile(...)`), les projets (`REPOS`). Puis relance :
 
 ```
 .venv\Scripts\python.exe scripts\fetch_contributions.py
-.venv\Scripts\python.exe scripts\generate_streak_svg.py
-.venv\Scripts\python.exe scripts\render_stats_svg.py
+$env:PYTHONUTF8=1; .venv\Scripts\python.exe scripts\render_readme_cards.py
 ```
 
 ## Changer de photo
@@ -26,13 +21,16 @@ Mets ta photo dans `photo/photo.jpg` (ce dossier n'est pas envoyé sur GitHub), 
 ```
 .venv\Scripts\python.exe scripts\prep_photo.py
 .venv\Scripts\python.exe scripts\make_ascii_svg.py
+$env:PYTHONUTF8=1; .venv\Scripts\python.exe scripts\render_readme_cards.py
 ```
 
 ## Publier
 
-```
-git add -A
-git commit -m "Mise à jour"
-git pull
-git push
-```
+1. Sur github.com, crée un repo **public** nommé exactement `CHRIISHEART` (vide, sans README).
+2. `git push -u origin main`
+3. Sur GitHub > Actions, lance « Mise à jour du profil » une fois pour vérifier.
+
+## Serpent
+
+Le workflow `.github/workflows/snake.yml` dessine un serpent rouge qui mange ta grille
+(toutes les 12 h). Les images vont sur la branche `output` ; couleurs modifiables dans ce fichier.
