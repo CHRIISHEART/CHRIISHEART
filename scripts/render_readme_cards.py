@@ -415,26 +415,95 @@ def activity(data):
 
 
 # ---- 4 · repo cards -----------------------------------------------------------
-REPO_W, REPO_H = 880 / 2 - 6, 176
+REPO_W, REPO_H = 880 / 2 - 6, 196
 REPOS = [
     ("IDATE", "Drop soon.", "Code", MQ_R),
     ("idsherlock", "Drop soon.", "Code", MQ_G),
 ]
 
 
+
+def icon_message(x, y, size=64):
+    """Icône d'app « message » (bulle + points qui s'animent), dégradé rouge."""
+    k = size / 64
+    dots = "".join(
+        f'<circle cx="{22 + i * 10}" cy="30" r="3.4" fill="#e8263d">'
+        f'<animate attributeName="opacity" values=".25;1;.25" dur="1.2s" begin="{i * .2:.1f}s" repeatCount="indefinite"/>'
+        f'<animateTransform attributeName="transform" type="translate" values="0 0;0 -2.5;0 0" dur="1.2s" begin="{i * .2:.1f}s" repeatCount="indefinite"/></circle>'
+        for i in range(3))
+    return f"""<g transform="translate({x} {y}) scale({k})">
+  <defs><linearGradient id="icm" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff6a5a"/><stop offset="1" stop-color="#e8263d"/></linearGradient></defs>
+  <rect width="64" height="64" rx="15" fill="url(#icm)"/>
+  <rect x="1" y="1" width="62" height="30" rx="14" fill="#fff" opacity=".12"/>
+  <path d="M32,13 C45,13 53,20.5 53,30 C53,39.5 45,47 32,47 C29.5,47 27.2,46.7 25,46.1 C22.5,48.6 18.6,50.6 14,51 C16.3,48.6 17.6,46 17.9,43.2 C13.6,40.2 11,35.4 11,30 C11,20.5 19,13 32,13 Z" fill="#fff"/>
+  {dots}
+</g>"""
+
+
+def icon_loupe(x, y, size=64):
+    """Icône d'app « loupe » (enquête), dégradé vert, la loupe balaie doucement."""
+    k = size / 64
+    return f"""<g transform="translate({x} {y}) scale({k})">
+  <defs><linearGradient id="icl" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3ddc97"/><stop offset="1" stop-color="#0b9e6e"/></linearGradient></defs>
+  <rect width="64" height="64" rx="15" fill="url(#icl)"/>
+  <rect x="1" y="1" width="62" height="30" rx="14" fill="#fff" opacity=".12"/>
+  <g><animateTransform attributeName="transform" type="rotate" values="-8 32 32;8 32 32;-8 32 32" dur="3s" repeatCount="indefinite"/>
+    <circle cx="28" cy="28" r="12" fill="#fff" fill-opacity=".18" stroke="#fff" stroke-width="5"/>
+    <line x1="37" y1="37" x2="48" y2="48" stroke="#fff" stroke-width="6.5" stroke-linecap="round"/>
+    <path d="M21,24 A8,8 0 0 1 27,19" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" opacity=".8"/></g>
+</g>"""
+
+
+REPO_ICONS = {"IDATE": icon_message, "idsherlock": icon_loupe}
+
+
+def bubble(x, y, text, fill, fg, side, delay, w_char=7.4):
+    """Bulle de message (côté « gauche » = reçu, « droite » = envoyé), qui pop."""
+    w = len(text) * w_char + 28 + 10 * sum(ord(ch) > 0x2000 for ch in text)  # les emojis sont plus larges
+    h = 32
+    bx = x if side == "gauche" else x - w
+    tail = (f'M{bx + 4},{y + h - 6} q-2,7 -8,9 q9,0 15,-5 z' if side == "gauche"
+            else f'M{bx + w - 4},{y + h - 6} q2,7 8,9 q-9,0 -15,-5 z')
+    return (f'<g class="p" {d(delay)}><path d="{tail}" fill="{fill}"/>'
+            f'<rect x="{bx:.0f}" y="{y}" width="{w:.0f}" height="{h}" rx="16" fill="{fill}"/>'
+            f'<text x="{bx + 14:.0f}" y="{y + 21}" font-family="{SANS}" font-size="14" fill="{fg}">{escape(text)}</text></g>')
+
+
+def typing(x, y, delay):
+    """Bulle « en train d'écrire… » avec 3 points qui sautillent."""
+    dots = "".join(
+        f'<circle cx="{x + 16 + k * 11}" cy="{y + 16}" r="3.4" fill="{MQ_SOFT}">'
+        f'<animate attributeName="opacity" values=".3;1;.3" dur="1.2s" begin="{k * .2:.1f}s" repeatCount="indefinite"/>'
+        f'<animateTransform attributeName="transform" type="translate" values="0 0;0 -3;0 0" dur="1.2s" begin="{k * .2:.1f}s" repeatCount="indefinite"/></circle>'
+        for k in range(3))
+    return (f'<g class="p" {d(delay)}><path d="M{x + 4},{y + 26} q-2,7 -8,9 q9,0 15,-5 z" fill="{MQ_LINE}"/>'
+            f'<rect x="{x}" y="{y}" width="54" height="32" rx="16" fill="{MQ_LINE}"/>{dots}</g>')
+
+
+# conversation affichée dans chaque carte de projet : (question, réponse)
+REPO_CHAT = {
+    "IDATE": ("C'est quoi IDATE ?", "Drop soon… 👀"),
+    "idsherlock": ("C'est quoi idsherlock ?", "Drop soon… 🔎"),
+}
+
+
 def repo_card(i, name, desc, lang, color, stars):
+    """Carte de projet en forme de mini conversation de messagerie."""
     delay = 4.6 + i * 0.12
-    meta = f"{lang}  ·  ★ {stars}" if stars else f"{lang}  ·  drop soon"
+    q, a = REPO_CHAT.get(name, (f"C'est quoi {name} ?", desc))
+    grad = ("#ff6a5a", "#e8263d") if color == MQ_R else ("#3ddc97", "#0b9e6e")
     body = f"""
 {glass_panel(REPO_W, REPO_H, 14)}
+<defs><linearGradient id="bub" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="{grad[0]}"/><stop offset="1" stop-color="{grad[1]}"/></linearGradient></defs>
 <g class="r" {d(delay)}>
   <circle cx="28" cy="34" r="5" fill="{color}"/>
   <text x="40" y="39" font-family="{SANS}" font-weight="600" font-size="18" fill="{MQ_TXT}">{escape(name)}</text>
-  {text_lines(24, 72, wrap(desc, 52), 21, f'font-family="{SANS}" font-size="14" fill="{MQ_SOFT}"')}
-  <text x="24" y="{REPO_H - 24}" font-family="{MONO}" font-size="12" fill="{MQ_SOFT}">{escape(meta)}</text>
 </g>
+{bubble(24, 58, q, MQ_LINE, MQ_TXT, "gauche", delay + .4)}
+{bubble(REPO_W - 24, 100, a, "url(#bub)", "#ffffff", "droite", delay + 1.1)}
+{typing(24, 142, delay + 1.8)}
 """
-    write(f"repo-{name}.svg", svg(REPO_W, REPO_H, body, ["sans", "sans-b", "mono"], f"{name}: {desc}",
+    write(f"repo-{name}.svg", svg(REPO_W, REPO_H, body, ["sans", "sans-b", "mono"], f"{name} : {q} {a}",
                                   left=6 * i, right=6 - 6 * i))
 
 
