@@ -592,13 +592,13 @@ def bonhomme_svg():
                     for a in [__import__("math").radians(d) for d in range(180, 361, 22)])
     return (
         '<g>'
-        f'<animateTransform attributeName="transform" type="translate" values="0,1.5;0,0.3;0,1.5" dur=".3s" repeatCount="indefinite"/>'
+        f'<animateTransform attributeName="transform" type="translate" values="0,1.5;0,0.3;0,1.5" dur=".45s" repeatCount="indefinite"/>'
         '<g transform="scale(1.0)">'
         # jambes et bras (derrière le corps)
-        + limb(-2.5, 8, -2.5, 13.5, "#0e0e0e", 2.6, 25, .3)
-        + limb(2.5, 8, 2.5, 13.5, "#0e0e0e", 2.6, -25, .3)
-        + limb(-6.2, 1.5, -8, 7.5, skin, 2.2, -30, .3)
-        + limb(6.2, 1.5, 8, 7.5, skin, 2.2, 30, .3)
+        + limb(-2.5, 8, -2.5, 13.5, "#0e0e0e", 2.6, 25, .45)
+        + limb(2.5, 8, 2.5, 13.5, "#0e0e0e", 2.6, -25, .45)
+        + limb(-6.2, 1.5, -8, 7.5, skin, 2.2, -30, .45)
+        + limb(6.2, 1.5, 8, 7.5, skin, 2.2, 30, .45)
         # t-shirt noir, col rond
         + f'<path d="M-7,3 Q-7,-0.5 -3.5,-0.8 L3.5,-0.8 Q7,-0.5 7,3 L7,9 Q7,10 6,10 L-6,10 Q-7,10 -7,9 Z" fill="{tee}"/>'
         f'<path d="M-2.6,-0.8 Q0,1.6 2.6,-0.8" fill="none" stroke="#2c2c2c" stroke-width="1"/>'
@@ -623,7 +623,7 @@ def bonhomme_svg():
         f'<path d="M-0.8,-2.6 Q0,-2 0.8,-2.6" stroke="{skin_d}" stroke-width=".6" fill="none"/>'
         # petite bouche qui boude (et croque un peu)
         '<ellipse cx="0" cy="-1.1" rx="1.2" ry=".35" fill="#5a2a1a">'
-        '<animate attributeName="ry" values=".3;.9;.3" dur=".3s" repeatCount="indefinite"/></ellipse>'
+        '<animate attributeName="ry" values=".3;.9;.3" dur=".45s" repeatCount="indefinite"/></ellipse>'
         '</g></g>')
 
 
@@ -641,7 +641,7 @@ def heatmap_crab(data):
         rows = range(7) if col % 2 == 0 else range(6, -1, -1)
         order += [(col, r) for r in rows]
     n = len(order)
-    T = 22.0                         # durée d'un tour complet (s)
+    T = 45.0                         # durée d'un tour complet (s) : il marche tranquillement
     run = 0.9                        # part du tour où le crabe marche, le reste = pause
     when = {cr: i / (n - 1) * run for i, cr in enumerate(order)}
     cx = lambda c: gx + c * step + cell / 2
