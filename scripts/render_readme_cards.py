@@ -32,6 +32,9 @@ SNAKE = os.path.join(ROOT, "dist", "serpent.svg")
 # qui mange la grille « Chaque jour, en vert » :
 #   "bonhomme" (mon perso, dessiné ici), "crabe" (dessiné ici) ou "serpent" (snk)
 CHASSEUR = "bonhomme"
+# effet sur le portrait du terminal : "aucun", "cendres", "hash", "matrix", "glitch"
+#   ou "cendres+glitch" (le mélange)
+EFFET = "cendres+glitch"
 GH_USER = "CHRIISHEART"
 MOIS = ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"]
 
@@ -472,29 +475,273 @@ def snake_inline(x, y, w):
 
 
 
+
+def _rows_svg(rows, cls=True, t_art=1.1):
+    out = []
+    for i, (y, txt) in enumerate(rows):
+        anim = (f'class="f" style="animation-delay:{t_art + i * 0.02:.3f}s;animation-duration:.3s" ' if cls else "")
+        out.append(f'<text {anim}xml:space="preserve" x="20" y="{y}" font-size="7.2" textLength="800" '
+                   f'lengthAdjust="spacing" fill="url(#pgr)">{txt}</text>')
+    return out
+
+
+def fx_cendres(rows, top, bot):
+    """Le portrait part en poussière vers la droite, puis se reforme (boucle de 10 s)."""
+    import random
+    rnd = random.Random(7)
+    P, NX, NY = 10.0, 18, 18
+    art = '<g id="art">' + "".join(_rows_svg(rows, cls=False)) + '</g>'
+    bw, bh = 800 / NX, (bot - top) / NY
+    clips, blocks = [], []
+    for bx in range(NX):
+        for by in range(NY):
+            x, y = 20 + bx * bw, top + by * bh
+            cid = f"k{bx}_{by}"
+            clips.append(f'<clipPath id="{cid}"><rect x="{x:.1f}" y="{y:.1f}" width="{bw + .6:.1f}" height="{bh + .6:.1f}"/></clipPath>')
+            s0 = 2.6 + bx / NX * 1.8 + rnd.random() * .5
+            s1 = s0 + 1.1
+            r0, r1 = 7.2 + (NX - bx) / NX * .5 + rnd.random() * .3, 0
+            r1 = r0 + 1.0
+            dx, dy = 70 + rnd.random() * 160, -20 - rnd.random() * 110
+            kt = f"0;{s0 / P:.4f};{s1 / P:.4f};{r0 / P:.4f};{min(r1 / P, .999):.4f};1"
+            blocks.append(
+                f'<g clip-path="url(#{cid})"><g>'
+                f'<animateTransform attributeName="transform" type="translate" values="0 0;0 0;{dx:.0f} {dy:.0f};{dx:.0f} {dy:.0f};0 0;0 0" '
+                f'keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/>'
+                f'<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/>'
+                f'<use href="#art"/></g></g>')
+    dust = []
+    for _ in range(110):
+        x, y = 20 + rnd.random() * 800, top + rnd.random() * (bot - top)
+        s0 = 2.6 + (x - 20) / 800 * 1.8 + rnd.random() * .6
+        e = s0 + 1.6 + rnd.random()
+        dx, dy = 120 + rnd.random() * 260, -40 - rnd.random() * 160
+        col = rnd.choice(["#8ff3c6", "#1fcf8a", "#14a56f", "#ff4f3d"])
+        kt = f"0;{s0 / P:.4f};{e / P:.4f};1"
+        dust.append(
+            f'<circle cx="{x:.0f}" cy="{y:.0f}" r="{1.5 + rnd.random() * 3:.1f}" fill="{col}" opacity="0">'
+            f'<animate attributeName="opacity" values="0;.9;0;0" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/>'
+            f'<animateTransform attributeName="transform" type="translate" values="0 0;0 0;{dx:.0f} {dy:.0f};{dx:.0f} {dy:.0f}" '
+            f'keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/></circle>')
+    return f'<defs>{art}{"".join(clips)}</defs>{"".join(blocks)}{"".join(dust)}'
+
+
+def fx_hash(rows, top, bot):
+    """Des caractères au hasard défilent puis se figent en portrait (décryptage),
+    toutes les 12 s le code se rebrouille un instant."""
+    import random, html as _h
+    rnd = random.Random(3)
+    P, F, FD = 12.0, 7, .12
+    pool = "!@#$%&*+=?<>/\\|01ABCDEFXZ"
+    out = []
+    for i, (y, txt) in enumerate(rows):
+        raw = _h.unescape(txt)
+        st = .3 + i * .016
+        end = st + F * FD
+        base = (f'xml:space="preserve" x="20" y="{y}" font-size="7.2" textLength="800" '
+                f'lengthAdjust="spacing"')
+        for j in range(F):
+            scr = "".join(c if c == " " else rnd.choice(pool) for c in raw)
+            a, b = st + j * FD, st + (j + 1) * FD
+            g1, g2 = 11.2 + (j % 3) * .25, 11.2 + (j % 3 + 1) * .25
+            out.append(
+                f'<text {base} fill="{"#ff4f3d" if j % 3 == 0 else "#8ff3c6"}" opacity="0">{_h.escape(scr)}'
+                f'<animate attributeName="opacity" calcMode="discrete" values="0;1;0;1;0" '
+                f'keyTimes="0;{a / P:.4f};{b / P:.4f};{g1 / P:.4f};{g2 / P:.4f}" dur="{P}s" repeatCount="indefinite"/></text>')
+        out.append(
+            f'<text {base} fill="url(#pgr)">{txt}'
+            f'<animate attributeName="opacity" calcMode="discrete" values="0;1;0;1" '
+            f'keyTimes="0;{end / P:.4f};{11.2 / P:.4f};{11.95 / P:.4f}" dur="{P}s" repeatCount="indefinite"/></text>')
+    return "".join(out)
+
+
+def fx_matrix(rows, top, bot):
+    """Pluie de code : des colonnes de caractères verts tombent sur le portrait."""
+    import random
+    rnd = random.Random(11)
+    out = ['<g opacity=".92">'] + _rows_svg(rows) + ['</g>']
+    H = bot - top
+    pool = "01アイウエオカキクケコｱｲｳｴｵ#$%&*+<>"
+    for k in range(34):
+        x = 20 + k * (800 / 34) + rnd.random() * 8
+        n = 10 + rnd.randint(0, 10)
+        dur = 3 + rnd.random() * 4
+        chars = "".join(
+            f'<tspan x="{x:.0f}" dy="22" fill="{"#e9fff5" if j == n - 1 else "#1fcf8a"}" '
+            f'fill-opacity="{0.15 + 0.85 * (j + 1) / n:.2f}">{rnd.choice(pool)}</tspan>' for j in range(n))
+        out.append(
+            f'<text font-size="20" font-weight="700">{chars}'
+            f'<animateTransform attributeName="transform" type="translate" values="0 {top - n * 22 - 40:.0f};0 {bot + 20:.0f}" '
+            f'dur="{dur:.2f}s" begin="-{rnd.random() * dur:.2f}s" repeatCount="indefinite"/></text>')
+    return "".join(out)
+
+
+def fx_glitch(rows, top, bot):
+    """Le portrait bugge toutes les 4 s : bandes décalées, copies rouge et verte, flash."""
+    import random
+    rnd = random.Random(5)
+    P, g0 = 4.0, 3.0
+    kt = f"0;{g0 / P:.3f};{(g0 + .08) / P:.3f};{(g0 + .16) / P:.3f};{(g0 + .24) / P:.3f};{(g0 + .32) / P:.3f};1"
+    bands, nb = [], 9
+    per = (len(rows) + nb - 1) // nb
+    for b in range(nb):
+        part = _rows_svg(rows[b * per:(b + 1) * per], t_art=1.1 + b * per * .02)
+        d1, d2, d3 = (rnd.choice([-1, 1]) * rnd.randint(4, 26) for _ in range(3))
+        bands.append(
+            f'<g>{"".join(part)}<animateTransform attributeName="transform" type="translate" '
+            f'values="0 0;0 0;{d1} 0;{d2} 0;{d3} 0;0 0;0 0" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/></g>')
+    art = '<g id="art2">' + "".join(_rows_svg(rows, cls=False)) + '</g>'
+    ghost = lambda col, dx: (
+        f'<g opacity="0" style="mix-blend-mode:screen"><use href="#art2" transform="translate({dx} 0)" style="fill:{col}"/>'
+        f'<animate attributeName="opacity" values="0;0;.7;0;.6;0;0" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/></g>')
+    flash = (f'<rect x="20" y="{top:.0f}" width="800" height="{bot - top:.0f}" fill="#ff4f3d" opacity="0">'
+             f'<animate attributeName="opacity" values="0;0;.12;0;.08;0;0" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/></rect>')
+    red = f'<defs>{art}<filter id="tr"><feColorMatrix values="1 0 0 0 .6  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter></defs>'
+    gr = (f'<g opacity="0" filter="url(#tr)"><use href="#art2" transform="translate(-9 0)"/>'
+          f'<animate attributeName="opacity" values="0;0;.75;0;.6;0;0" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/></g>')
+    return red + "".join(bands) + gr + flash
+
+
+
+def _bursts(P, bursts, frames):
+    """values/keyTimes SMIL : au repos `frames[0]` puis, à chaque instant de
+    `bursts`, enchaîne `frames` toutes les 0,08 s."""
+    pts = [(0.0, frames[0])]
+    for g in bursts:
+        for k, v in enumerate(frames):
+            pts.append((g + k * .08, v))
+        pts.append((g + len(frames) * .08, frames[0]))
+    pts.append((P, frames[0]))
+    vals = ";".join(v for _, v in pts)
+    kts = ";".join(f"{t / P:.4f}" for t, _ in pts)
+    return vals, kts
+
+
+def fx_cendres_glitch(rows, top, bot, t_art=1.1):
+    """Mélange : le portrait bugge (glitch), part en cendres vers la droite, se
+    reforme, rebugge un coup, et ainsi de suite (boucle de 10 s).
+    Version légère : chaque ligne est coupée en NX morceaux une seule fois,
+    regroupés en NB bandes x NX colonnes (pas de copies du portrait)."""
+    import random, html as _h
+    rnd = random.Random(7)
+    P, NX, NB = 10.0, 12, 12
+    bursts = [1.4, 2.1, 8.5]
+    per = (len(rows) + NB - 1) // NB
+    out = ['<defs><filter id="tr"><feColorMatrix values="1 0 0 0 .6  0 0 0 0 0  0 0 0 0 0  0 0 0 1 0"/></filter></defs>']
+    for b in range(NB):
+        band_rows = rows[b * per:(b + 1) * per]
+        if not band_rows:
+            continue
+        cols = []
+        for c in range(NX):
+            texts = []
+            for k, (y, txt) in enumerate(band_rows):
+                ri = b * per + k              # n° de ligne : apparition ligne par ligne (comme avant)
+                raw = _h.unescape(txt)
+                L = len(raw)
+                a, e = round(c * L / NX), round((c + 1) * L / NX)
+                seg = raw[a:e]
+                if not seg.strip():
+                    continue
+                cw = 800 / L
+                texts.append(f'<text class="f" style="animation-delay:{t_art + ri * 0.02:.3f}s;animation-duration:.3s" '
+                             f'xml:space="preserve" x="{20 + a * cw:.1f}" y="{y}" font-size="7.2" '
+                             f'textLength="{(e - a) * cw:.1f}" lengthAdjust="spacing" fill="url(#pgr)">{_h.escape(seg)}</text>')
+            if not texts:
+                continue
+            s0 = 2.8 + c / NX * 1.8 + rnd.random() * .5
+            s1 = s0 + 1.1
+            r0 = 7.0 + (NX - c) / NX * .5 + rnd.random() * .3
+            r1 = r0 + 1.0
+            dx, dy = 70 + rnd.random() * 160, -20 - rnd.random() * 110
+            kt = f"0;{s0 / P:.4f};{s1 / P:.4f};{r0 / P:.4f};{min(r1 / P, .999):.4f};1"
+            cols.append(
+                f'<g>{"".join(texts)}'
+                f'<animateTransform attributeName="transform" type="translate" values="0 0;0 0;{dx:.0f} {dy:.0f};{dx:.0f} {dy:.0f};0 0;0 0" '
+                f'keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/>'
+                f'<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/></g>')
+        # glitch : toute la bande se décale pendant les bugs
+        d = [rnd.choice([-1, 1]) * rnd.randint(4, 26) for _ in range(3)]
+        vals, kts = _bursts(P, bursts, ["0 0"] + [f"{x} 0" for x in d])
+        out.append(f'<g>{"".join(cols)}<animateTransform attributeName="transform" type="translate" '
+                   f'values="{vals}" keyTimes="{kts}" dur="{P}s" repeatCount="indefinite"/></g>')
+    # (reflet rouge retiré à la demande de l'utilisateur)
+    fv, fkt = _bursts(P, bursts, ["0", ".12", "0", ".08"])
+    out.append(f'<rect x="20" y="{top:.0f}" width="800" height="{bot - top:.0f}" fill="#ff4f3d" opacity="0">'
+               f'<animate attributeName="opacity" values="{fv}" keyTimes="{fkt}" dur="{P}s" repeatCount="indefinite"/></rect>')
+    # poussière : n'apparaît qu'au moment où le portrait s'envole
+    for _ in range(90):
+        x, y = 20 + rnd.random() * 800, top + rnd.random() * (bot - top)
+        s0 = 2.8 + (x - 20) / 800 * 1.8 + rnd.random() * .6
+        e = s0 + 1.6 + rnd.random()
+        dx, dy = 120 + rnd.random() * 260, -40 - rnd.random() * 160
+        col = rnd.choice(["#8ff3c6", "#1fcf8a", "#14a56f", "#ff4f3d"])
+        kt = f"0;{(s0 - .01) / P:.4f};{s0 / P:.4f};{e / P:.4f};1"
+        out.append(
+            f'<circle cx="{x:.0f}" cy="{y:.0f}" r="{1.5 + rnd.random() * 3:.1f}" fill="{col}" opacity="0">'
+            f'<animate attributeName="opacity" values="0;0;.9;0;0" keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/>'
+            f'<animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 0;{dx:.0f} {dy:.0f};{dx:.0f} {dy:.0f}" '
+            f'keyTimes="{kt}" dur="{P}s" repeatCount="indefinite"/></circle>')
+    # la boucle glitch + cendres ne démarre qu'une fois le portrait imprimé
+    start = t_art + len(rows) * 0.02 + 0.8
+    return "".join(out).replace('repeatCount="indefinite"', f'begin="{start:.2f}s" repeatCount="indefinite"')
+
+
 def portrait_panel():
-    """Panneau sombre en haut : portrait ASCII en vert, qui s'imprime ligne par ligne."""
+    """Fenêtre de terminal en haut : `./portrait.sh` se tape, le portrait ASCII
+    vert s'imprime ligne par ligne, puis `whoami` et un curseur qui clignote."""
     src = open(PORTRAIT, encoding="utf-8").read()
     rows = re.findall(r'<text xml:space="preserve"[^>]*\by="([\d.]+)"[^>]*>(.*?)</text>', src, re.S)
     ys = [float(y) for y, _ in rows]
     top, bot = min(ys) - 10, max(ys) + 4
-    ph = 400                                   # hauteur du portrait dans le panneau
+    TB = 34                                    # barre de titre
+    ph = 380                                   # hauteur du portrait
     pw = ph * 800 / (bot - top)
-    h = ph + 56
-    lines = "".join(
-        f'<text class="f" style="animation-delay:{0.2 + i * 0.015:.3f}s;animation-duration:.35s" '
-        f'xml:space="preserve" x="20" y="{y}" font-size="7.2" textLength="800" lengthAdjust="spacing" '
-        f'fill="url(#pgr)">{txt}</text>'
-        for i, (y, txt) in enumerate(rows)
-    )
+    p_y = TB + 50                              # le portrait commence sous la commande
+    st_y = p_y + ph + 10                       # ligne de statut
+    h = st_y + 46
+    mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
+    t_cmd, t_art = 0.3, 1.1                    # début de la frappe, début du portrait
+    fx = {"cendres": fx_cendres, "hash": fx_hash, "matrix": fx_matrix, "glitch": fx_glitch,
+          "cendres+glitch": fx_cendres_glitch}.get(EFFET)
+    lines = (fx_cendres_glitch(rows, top, bot, t_art) if EFFET == "cendres+glitch"
+             else fx(rows, top, bot) if fx else "".join(_rows_svg(rows, t_art=t_art)))
+    t_who = t_art + len(rows) * 0.02 + 0.3
+    dots = "".join(f'<circle cx="{24 + k * 18}" cy="{TB / 2}" r="5.5" fill="{c}"/>'
+                   for k, c in enumerate(["#ff5f56", "#ffbd2e", "#27c93f"]))
+
+    def typed(x, y, text_svg, n_chars, begin, cid):
+        """Texte révélé de gauche à droite (frappe) ; visible sans SMIL."""
+        wpx = n_chars * 8.3 + 6
+        return (f'<clipPath id="{cid}"><rect x="{x}" y="{y - 18}" width="{wpx:.0f}" height="26">'
+                f'<animate attributeName="width" values="0;0;{wpx:.0f}" keyTimes="0;{begin / (begin + .6):.3f};1" '
+                f'dur="{begin + .6:.2f}s" fill="freeze"/></rect></clipPath>'
+                f'<g clip-path="url(#{cid})">{text_svg}</g>')
+
+    cmd = (f'<text x="34" y="{TB + 32}" font-family="{mono}" font-size="15"><tspan fill="{MQ_G}">chriis@github</tspan>'
+           f'<tspan fill="{MQ_SOFT}">:~$ </tspan><tspan fill="{MQ_TXT}">./portrait.sh</tspan></text>')
+    who = (f'<text x="34" y="{st_y + 26}" font-family="{mono}" font-size="15"><tspan fill="{MQ_G}">chriis@github</tspan>'
+           f'<tspan fill="{MQ_SOFT}">:~$ </tspan><tspan fill="{MQ_TXT}">whoami</tspan>'
+           f'<tspan fill="{MQ_R}">  Chriis Heart</tspan></text>')
+    who_len = len("chriis@github:~$ whoami  Chriis Heart")
     body = f"""
 {glass_panel(W, h)}
 <defs><linearGradient id="pgr" gradientUnits="userSpaceOnUse" x1="0" y1="{top:.0f}" x2="0" y2="{bot:.0f}">
   <stop offset="0" stop-color="#8ff3c6"/><stop offset=".55" stop-color="{MQ_G}"/><stop offset="1" stop-color="#14a56f"/></linearGradient></defs>
-<svg x="{(W - pw) / 2:.1f}" y="28" width="{pw:.1f}" height="{ph}" viewBox="20 {top:.1f} 800 {bot - top:.1f}"
-  font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{lines}</svg>
+<rect x="1.5" y="1.5" width="{W - 3}" height="{TB}" rx="15" fill="#000" opacity=".25"/>
+<rect x="1.5" y="{TB - 10}" width="{W - 3}" height="10" fill="#000" opacity=".25"/>
+<line x1="1.5" y1="{TB + 1.5}" x2="{W - 1.5}" y2="{TB + 1.5}" stroke="{MQ_LINE}"/>
+{dots}
+<text x="{W / 2}" y="{TB / 2 + 4}" text-anchor="middle" font-family="{mono}" font-size="12" fill="{MQ_SOFT}">chriis@github: ~</text>
+{typed(34, TB + 32, cmd, len("chriis@github:~$ ./portrait.sh"), t_cmd, "tc")}
+<svg x="{(W - pw) / 2:.1f}" y="{p_y}" width="{pw:.1f}" height="{ph}" viewBox="20 {top:.1f} 800 {bot - top:.1f}"
+  font-family="{mono}" overflow="hidden">{lines}</svg>
+<line x1="1.5" y1="{st_y}" x2="{W - 1.5}" y2="{st_y}" stroke="{MQ_LINE}"/>
+{typed(34, st_y + 26, who, who_len, t_who, "tw")}
+<rect x="{34 + who_len * 8.3 + 4:.0f}" y="{st_y + 13}" width="9" height="17" fill="{MQ_G}">
+  <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;.5;.51;1" dur="1s" repeatCount="indefinite"/></rect>
 """
-    write("portrait.svg", svg(W, h, body, [], "Portrait ASCII de Chriis Heart"))
+    write("portrait.svg", svg(W, h, body, [], "Terminal : portrait ASCII de Chriis Heart"))
 
 
 def heatmap(data):
