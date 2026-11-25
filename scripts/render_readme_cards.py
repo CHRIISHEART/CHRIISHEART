@@ -27,6 +27,11 @@ DATA = os.path.join(ROOT, "data", "contributions.json")
 OUT = os.path.join(ROOT, "cards")
 FONTS = os.path.join(ROOT, "fonts")
 PORTRAIT = os.path.join(ROOT, "chris-ascii.svg")
+# serpent fabriqué par Platane/snk dans le workflow (dist/ n'est pas versionné)
+SNAKE = os.path.join(ROOT, "dist", "serpent.svg")
+# qui mange la grille « Chaque jour, en vert » :
+#   "bonhomme" (mon perso, dessiné ici), "crabe" (dessiné ici) ou "serpent" (snk)
+CHASSEUR = "bonhomme"
 GH_USER = "CHRIISHEART"
 MOIS = ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"]
 
@@ -47,7 +52,7 @@ MQ_RED = ("#ff4f3d", "#e8263d")
 MQ_GREEN = ("#1fcf8a", "#0b9e6e")
 MQ_BLACK = ("#24303a", "#141b22")
 # effet « liquid glass » sur les 3 tuiles : True = verre, False = B Tropical simple
-GLASS = True
+GLASS = False
 
 # ---- thème Martinique pour les grands panneaux (grille, contributions, codes) --
 MQ_TXT = "#f2f5f7"       # texte principal
@@ -447,7 +452,56 @@ def level_for(c):
     return 0 if c == 0 else 1 if c <= 5 else 2 if c <= 15 else 3 if c <= 30 else 4 if c <= 50 else 5
 
 
+
+def snake_inline(x, y, w):
+    """Intègre le SVG du serpent dans un panneau. Les classes et animations de
+    snk (c, s, u, c0, u1...) sont préfixées « z » pour ne pas gêner les nôtres."""
+    src = open(SNAKE, encoding="utf-8").read()
+    vb = re.search(r'viewBox="([^"]+)"', src).group(1)
+    vx, vy, vw, vh = (float(v) for v in vb.split())
+    inner = re.sub(r'^.*?<svg[^>]*>', '', src, count=1, flags=re.S)
+    inner = re.sub(r'</svg>\s*$', '', inner)
+    inner = re.sub(r'<desc>.*?</desc>', '', inner, flags=re.S)
+    inner = re.sub(r'\.([csu])(\d*)(?=[{.,:\s])', r'.z\1\2', inner)
+    inner = re.sub(r'@keyframes ([csu])(\d+)', r'@keyframes z\1\2', inner)
+    inner = re.sub(r'animation-name:([csu])(\d+)', r'animation-name:z\1\2', inner)
+    inner = re.sub(r'class="([^"]+)"',
+                   lambda m: 'class="' + " ".join("z" + c for c in m.group(1).split()) + '"', inner)
+    h = w * vh / vw
+    return (f'<svg x="{x}" y="{y}" width="{w}" height="{h:.1f}" viewBox="{vb}">{inner}</svg>', h)
+
+
+
+def portrait_panel():
+    """Panneau sombre en haut : portrait ASCII en vert, qui s'imprime ligne par ligne."""
+    src = open(PORTRAIT, encoding="utf-8").read()
+    rows = re.findall(r'<text xml:space="preserve"[^>]*\by="([\d.]+)"[^>]*>(.*?)</text>', src, re.S)
+    ys = [float(y) for y, _ in rows]
+    top, bot = min(ys) - 10, max(ys) + 4
+    ph = 400                                   # hauteur du portrait dans le panneau
+    pw = ph * 800 / (bot - top)
+    h = ph + 56
+    lines = "".join(
+        f'<text class="f" style="animation-delay:{0.2 + i * 0.015:.3f}s;animation-duration:.35s" '
+        f'xml:space="preserve" x="20" y="{y}" font-size="7.2" textLength="800" lengthAdjust="spacing" '
+        f'fill="url(#pgr)">{txt}</text>'
+        for i, (y, txt) in enumerate(rows)
+    )
+    body = f"""
+{glass_panel(W, h)}
+<defs><linearGradient id="pgr" gradientUnits="userSpaceOnUse" x1="0" y1="{top:.0f}" x2="0" y2="{bot:.0f}">
+  <stop offset="0" stop-color="#8ff3c6"/><stop offset=".55" stop-color="{MQ_G}"/><stop offset="1" stop-color="#14a56f"/></linearGradient></defs>
+<svg x="{(W - pw) / 2:.1f}" y="28" width="{pw:.1f}" height="{ph}" viewBox="20 {top:.1f} 800 {bot - top:.1f}"
+  font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace">{lines}</svg>
+"""
+    write("portrait.svg", svg(W, h, body, [], "Portrait ASCII de Chriis Heart"))
+
+
 def heatmap(data):
+    if CHASSEUR in ("crabe", "bonhomme"):
+        return heatmap_crab(data)
+    if os.path.exists(SNAKE):
+        return heatmap_snake(data)
     days = data["days"]
     first = datetime.date.fromisoformat(days[0]["date"])
     lead = (first.weekday() + 1) % 7  # sunday = 0
@@ -497,6 +551,167 @@ def heatmap(data):
                              f'Calendrier : {data["total_contributions"]:,} contributions sur un an'))
 
 
+
+
+def crab_svg():
+    """Petit crabe rouge (original), centré sur 0,0, pinces qui claquent."""
+    claw = lambda sx: (
+        f'<g transform="translate({sx * 11} -6)"><g>'
+        f'<animateTransform attributeName="transform" type="rotate" values="0;{-sx * 28};0" dur=".32s" repeatCount="indefinite"/>'
+        f'<path d="M0,0 l{sx * 4},-6 a4,4 0 1 1 {sx * 2},6 z" fill="{MQ_R}"/>'
+        f'<path d="M0,0 l{sx * 6},-1 a3.5,3.5 0 0 1 {-sx * 1},5 z" fill="#ff7a5c"/></g></g>')
+    legs = "".join(
+        f'<path d="M{sx * 6},{1 + k * 2.6} l{sx * 5},{1.5 + k}" stroke="{MQ_R}" stroke-width="1.6" stroke-linecap="round"/>'
+        for sx in (-1, 1) for k in range(3))
+    return (
+        '<g>'
+        f'<animateTransform attributeName="transform" type="translate" values="0,0;0,-1.2;0,0" dur=".24s" repeatCount="indefinite" additive="sum"/>'
+        f'{legs}{claw(-1)}{claw(1)}'
+        f'<ellipse cx="0" cy="2" rx="9" ry="6.5" fill="{MQ_R}"/>'
+        f'<ellipse cx="0" cy="0" rx="6" ry="3" fill="#ff8a70" opacity=".6"/>'
+        '<line x1="-3" y1="-4" x2="-3.5" y2="-8" stroke="#ff4f3d" stroke-width="1.4"/>'
+        '<line x1="3" y1="-4" x2="3.5" y2="-8" stroke="#ff4f3d" stroke-width="1.4"/>'
+        '<circle cx="-3.6" cy="-8.6" r="2" fill="#fff"/><circle cx="3.6" cy="-8.6" r="2" fill="#fff"/>'
+        '<circle cx="-3.4" cy="-8.4" r="1" fill="#111"/><circle cx="3.8" cy="-8.4" r="1" fill="#111"/>'
+        '</g>')
+
+
+
+def bonhomme_svg():
+    """Petit bonhomme d'après ma photo : peau marron, cheveux bouclés courts et
+    arrondis (ligne droite sur le front), sourcils froncés avec plis sur le front,
+    yeux qui regardent de côté, petite bouche qui boude, t-shirt noir col rond.
+    Il marche (jambes et bras) et croque (la bouche s'ouvre un peu)."""
+    skin, skin_d, hair, tee = "#a0673f", "#80502f", "#141414", "#1c1c1c"
+    limb = lambda x1, y1, x2, y2, col, w, a, dur: (
+        f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{col}" stroke-width="{w}" stroke-linecap="round">'
+        f'<animateTransform attributeName="transform" type="rotate" values="{a} {x1} {y1};{-a} {x1} {y1};{a} {x1} {y1}" '
+        f'dur="{dur}s" repeatCount="indefinite"/></line>')
+    # cheveux bouclés : un dôme + petites boucles sur le contour
+    curls = "".join(f'<circle cx="{7.4 * __import__("math").cos(a):.2f}" cy="{-10 + 7.2 * __import__("math").sin(a):.2f}" r="2.2" fill="{hair}"/>'
+                    for a in [__import__("math").radians(d) for d in range(180, 361, 22)])
+    return (
+        '<g>'
+        f'<animateTransform attributeName="transform" type="translate" values="0,1.5;0,0.3;0,1.5" dur=".3s" repeatCount="indefinite"/>'
+        '<g transform="scale(1.0)">'
+        # jambes et bras (derrière le corps)
+        + limb(-2.5, 8, -2.5, 13.5, "#0e0e0e", 2.6, 25, .3)
+        + limb(2.5, 8, 2.5, 13.5, "#0e0e0e", 2.6, -25, .3)
+        + limb(-6.2, 1.5, -8, 7.5, skin, 2.2, -30, .3)
+        + limb(6.2, 1.5, 8, 7.5, skin, 2.2, 30, .3)
+        # t-shirt noir, col rond
+        + f'<path d="M-7,3 Q-7,-0.5 -3.5,-0.8 L3.5,-0.8 Q7,-0.5 7,3 L7,9 Q7,10 6,10 L-6,10 Q-7,10 -7,9 Z" fill="{tee}"/>'
+        f'<path d="M-2.6,-0.8 Q0,1.6 2.6,-0.8" fill="none" stroke="#2c2c2c" stroke-width="1"/>'
+        # cou
+        + f'<rect x="-1.6" y="-2.6" width="3.2" height="2.4" fill="{skin_d}"/>'
+        # cheveux (derrière la tête) + oreilles + visage
+        + f'<ellipse cx="0" cy="-10.5" rx="7.6" ry="6.8" fill="{hair}"/>{curls}'
+        f'<ellipse cx="-6.4" cy="-6.8" rx="1.7" ry="2.2" fill="{skin}"/><ellipse cx="6.4" cy="-6.8" rx="1.7" ry="2.2" fill="{skin}"/>'
+        f'<ellipse cx="-6.4" cy="-6.8" rx=".8" ry="1.2" fill="{skin_d}"/><ellipse cx="6.4" cy="-6.8" rx=".8" ry="1.2" fill="{skin_d}"/>'
+        f'<path d="M-6,-9.5 L6,-9.5 L5.8,-4 Q5,0 0,0.6 Q-5,0 -5.8,-4 Z" fill="{skin}"/>'
+        # ligne des cheveux bien droite
+        f'<rect x="-6.2" y="-11.2" width="12.4" height="2" fill="{hair}"/>'
+        # plis de froncement au milieu du front
+        f'<path d="M-0.9,-9 Q-0.4,-7.6 -0.9,-6.6 M0.9,-9 Q0.4,-7.6 0.9,-6.6" stroke="{skin_d}" stroke-width=".55" fill="none"/>'
+        # sourcils épais froncés
+        '<path d="M-5,-7.4 Q-3,-7.9 -1.1,-6.3 M5,-7.4 Q3,-7.9 1.1,-6.3" stroke="#111" stroke-width="1.2" stroke-linecap="round" fill="none"/>'
+        # yeux en amande qui regardent sur le côté
+        '<path d="M-4.6,-5.2 Q-2.8,-6.2 -1.2,-5.2 Q-2.8,-4.3 -4.6,-5.2 Z" fill="#fff" stroke="#111" stroke-width=".4"/>'
+        '<path d="M4.6,-5.2 Q2.8,-6.2 1.2,-5.2 Q2.8,-4.3 4.6,-5.2 Z" fill="#fff" stroke="#111" stroke-width=".4"/>'
+        '<circle cx="-1.9" cy="-5.2" r=".75" fill="#111"/><circle cx="3.6" cy="-5.2" r=".75" fill="#111"/>'
+        # nez
+        f'<path d="M-0.8,-2.6 Q0,-2 0.8,-2.6" stroke="{skin_d}" stroke-width=".6" fill="none"/>'
+        # petite bouche qui boude (et croque un peu)
+        '<ellipse cx="0" cy="-1.1" rx="1.2" ry=".35" fill="#5a2a1a">'
+        '<animate attributeName="ry" values=".3;.9;.3" dur=".3s" repeatCount="indefinite"/></ellipse>'
+        '</g></g>')
+
+
+def heatmap_crab(data):
+    """Panneau « Chaque jour, en vert » : un crabe parcourt la grille colonne par
+    colonne (en zigzag) et mange les cases vertes, puis tout recommence."""
+    days = data["days"]
+    first = datetime.date.fromisoformat(days[0]["date"])
+    lead = (first.weekday() + 1) % 7
+    cell, step, gx, gy = 12, 15, 44, 96
+    ncols = (len(days) + lead + 6) // 7
+    # trajet en zigzag : descend la colonne 0, remonte la 1, etc.
+    order = []
+    for col in range(ncols):
+        rows = range(7) if col % 2 == 0 else range(6, -1, -1)
+        order += [(col, r) for r in rows]
+    n = len(order)
+    T = 22.0                         # durée d'un tour complet (s)
+    run = 0.9                        # part du tour où le crabe marche, le reste = pause
+    when = {cr: i / (n - 1) * run for i, cr in enumerate(order)}
+    cx = lambda c: gx + c * step + cell / 2
+    cy = lambda r: gy + r * step + cell / 2
+    pts = " ".join(f"{cx(c):.1f},{cy(r):.1f}" for c, r in order)
+    path = "M" + " L".join(f"{cx(c):.1f},{cy(r):.1f}" for c, r in order)
+
+    cells, months, seen = [], [], set()
+    for i, day in enumerate(days):
+        col, row = divmod(i + lead, 7)
+        date = datetime.date.fromisoformat(day["date"])
+        if date.day <= 7 and (date.year, date.month) not in seen and row == 0:
+            seen.add((date.year, date.month))
+            months.append((col, MOIS[date.month - 1]))
+        c = day["count"]
+        x, y = gx + col * step, gy + row * step
+        if not c:
+            cells.append(f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="3" fill="{MQ_EMPTY}"/>')
+            continue
+        k = when[(col, row)]
+        e = min(k + 0.004, 0.999)
+        # case verte : visible, mangée quand le crabe passe, revient au tour suivant
+        cells.append(
+            f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="3" fill="{MQ_EMPTY}"/>'
+            f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="3" fill="{MQ_LEVELS[level_for(c)]}">'
+            f'<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;{k:.4f};{e:.4f};.985;1" '
+            f'dur="{T}s" repeatCount="indefinite"/>'
+            f'<title>{day["date"]}: {c} contribution{"s" if c != 1 else ""}</title></rect>'
+            # petit éclat rouge au moment où il croque
+            f'<circle cx="{x + cell / 2}" cy="{y + cell / 2}" r="3" fill="none" stroke="{MQ_R}" opacity="0">'
+            f'<animate attributeName="opacity" values="0;0;.9;0;0" keyTimes="0;{k:.4f};{e:.4f};{min(e + .02, .99):.4f};1" dur="{T}s" repeatCount="indefinite"/>'
+            f'<animate attributeName="r" values="3;3;3;12;12" keyTimes="0;{k:.4f};{e:.4f};{min(e + .02, .99):.4f};1" dur="{T}s" repeatCount="indefinite"/></circle>'
+        )
+    right = gx + ncols * step - 3
+    labels = "".join(
+        f'<text x="{gx + col * step}" y="{gy + 7 * step + 16}" font-family="{MONO}" font-size="11" fill="{MQ_SOFT}">{m}</text>'
+        for col, m in months if col < ncols - 12)
+    who = bonhomme_svg() if CHASSEUR == "bonhomme" else crab_svg()
+    crab = (f'<g>{who}<animateMotion path="{path}" dur="{T}s" repeatCount="indefinite" '
+            f'keyPoints="0;1;1" keyTimes="0;{run};1" calcMode="linear"/></g>')
+    h = gy + 7 * step + 44
+    body = f"""
+{glass_panel(W, h)}
+<text class="r" {d(0.8)} x="42" y="62" font-family="{SERIF}" font-size="34" fill="{MQ_TXT}">Chaque jour, <tspan font-style="italic" fill="{MQ_G}">en vert</tspan></text>
+<g class="f" {d(0.8)}><circle class="live" cx="{right - 196}" cy="56" r="4" fill="{MQ_R}"/>
+<text x="{right}" y="60" text-anchor="end" font-family="{MONO}" font-size="12" letter-spacing="1" fill="{MQ_SOFT}">MIS À JOUR CHAQUE JOUR</text></g>
+{''.join(cells)}
+<g class="f" {d(1.2)}>{labels}</g>
+{crab}
+"""
+    write("heatmap.svg", svg(W, h, body, ["serif", "serif-i", "mono"],
+                             f'{"Mon petit bonhomme" if CHASSEUR == "bonhomme" else "Un crabe"} mange ma grille : {data["total_contributions"]:,} contributions sur un an'))
+
+
+def heatmap_snake(data):
+    """Panneau « Chaque jour, en vert » où le serpent mange la grille."""
+    snake, sh = snake_inline(16, 70, W - 32)
+    h = int(70 + sh + 18)
+    right = W - 42
+    body = f"""
+{glass_panel(W, h)}
+<text class="r" {d(0.8)} x="42" y="62" font-family="{SERIF}" font-size="34" fill="{MQ_TXT}">Chaque jour, <tspan font-style="italic" fill="{MQ_G}">en vert</tspan></text>
+<g class="f" {d(0.8)}><circle class="live" cx="{right - 196}" cy="56" r="4" fill="{MQ_R}"/>
+<text x="{right}" y="60" text-anchor="end" font-family="{MONO}" font-size="12" letter-spacing="1" fill="{MQ_SOFT}">MIS À JOUR CHAQUE JOUR</text></g>
+<g class="f" {d(1.0)}>{snake}</g>
+"""
+    write("heatmap.svg", svg(W, h, body, ["serif", "serif-i", "mono"],
+                             f'Serpent qui mange ma grille : {data["total_contributions"]:,} contributions sur un an'))
+
+
 def repo_stars():
     stars = {}
     try:
@@ -514,6 +729,7 @@ def repo_stars():
 if __name__ == "__main__":
     data = json.load(open(DATA, encoding="utf-8"))
     # hero()  # bandeau « Chriis Heart » retiré du profil le 2026-11-25
+    portrait_panel()
     tile("build", "CODE", MQ_RED, "#ffffff", "2", "projets",
          "IDATE, idsherlock · drop soon", 3.1, 0)
     tile("brand", "LIEU", MQ_GREEN, "#ffffff", "972", "Martinique",

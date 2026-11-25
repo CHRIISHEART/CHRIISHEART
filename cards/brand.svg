@@ -49,18 +49,8 @@
   <g clip-path="url(#card)">
     <rect width="285.3333333333333" height="210" fill="url(#tg)"/>
     
-    <g filter="url(#lb)">
-      <circle cx="60" cy="40" r="70" fill="#fff" opacity=".28">
-        <animate attributeName="cx" values="60;120;60" dur="9s" repeatCount="indefinite"/>
-        <animate attributeName="cy" values="40;70;40" dur="11s" repeatCount="indefinite"/></circle>
-      <circle cx="235.33333333333331" cy="180" r="80" fill="#000" opacity=".22">
-        <animate attributeName="cx" values="235.33333333333331;175.33333333333331;235.33333333333331" dur="10s" repeatCount="indefinite"/></circle>
-    </g>
-    <rect width="285.3333333333333" height="210" fill="url(#deep)"/>
-    <rect x="6" y="5" width="273.3333333333333" height="96.6" rx="11" fill="url(#gloss)"/>
-    <ellipse cx="70" cy="16" rx="58" ry="7" fill="url(#spec)" opacity=".8"/>
     <rect class="sh" style="animation-delay:4.75s" x="0" y="-20" width="90" height="250" fill="url(#gl)" transform="translate(-260 0)"/>
-    <rect x=".75" y=".75" width="283.8333333333333" height="208.5" rx="13.5" fill="none" stroke="url(#rim)" stroke-width="1.5"/>
+    <rect x="0.5" y="0.5" width="284.3333333333333" height="209" rx="14" fill="none" stroke="#ffffff" stroke-opacity=".14"/>
   </g>
   <text class="sl" style="animation-delay:3.70s" x="24" y="38" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="12" letter-spacing="1.2" fill="#ffffff">LIEU</text>
   <g class="ai" style="animation-delay:3.85s"><text class="n" style="animation-delay:4.65s" x="250" y="38" font-family="'Geist Mono', ui-monospace, SFMono-Regular, Menlo, monospace" font-size="14" fill="#ffffff">&#8594;</text></g>

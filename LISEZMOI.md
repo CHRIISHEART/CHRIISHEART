@@ -32,5 +32,6 @@ $env:PYTHONUTF8=1; .venv\Scripts\python.exe scripts\render_readme_cards.py
 
 ## Serpent
 
-Le workflow `.github/workflows/snake.yml` dessine un serpent rouge qui mange ta grille
-(toutes les 12 h). Les images vont sur la branche `output` ; couleurs modifiables dans ce fichier.
+Le workflow `update-profile-art.yml` fabrique un serpent rouge (Platane/snk) dans `dist/serpent.svg`,
+puis `render_readme_cards.py` l'intègre dans le panneau « Chaque jour, en vert ».
+Sans ce fichier, le panneau affiche la grille classique.
