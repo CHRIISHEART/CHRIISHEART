@@ -122,11 +122,18 @@ for i, (label, value, suffix, caption, accent) in enumerate(tiles):
         v = value * (1 - (1 - p) ** 3)
         t_on = count_start + COUNT_DUR * (k - 1) / FRAMES
         t_off = count_start + COUNT_DUR * k / FRAMES
-        anim = f'<set attributeName="opacity" to="1" begin="{t_on:.3f}s"/>'
         if k < FRAMES:
-            anim += f'<set attributeName="opacity" to="0" begin="{t_off:.3f}s"/>'
+            # intermediate frame: hidden by default, flashes on then off
+            start_op = '0'
+            anim = (f'<set attributeName="opacity" to="1" begin="{t_on:.3f}s"/>'
+                    f'<set attributeName="opacity" to="0" begin="{t_off:.3f}s"/>')
+        else:
+            # final value: visible by default (so viewers without SMIL still
+            # show the real number), hidden only until the count-up ends
+            start_op = '1'
+            anim = f'<set attributeName="opacity" to="0" begin="0s" end="{t_on:.3f}s"/>'
         parts.append(
-            f'<text x="{x+24:.1f}" y="{num_y}" opacity="0" font-size="54" font-weight="700" fill="{accent}">'
+            f'<text x="{x+24:.1f}" y="{num_y}" opacity="{start_op}" font-size="54" font-weight="700" fill="{accent}">'
             f'{fmt(v, value)}<tspan font-size="24" font-weight="400" fill="{MUTED}">{suffix}</tspan>'
             f'{anim}</text>'
         )
