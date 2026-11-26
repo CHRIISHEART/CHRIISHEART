@@ -35,6 +35,9 @@ CHASSEUR = "bonhomme"
 # effet sur le portrait du terminal : "aucun", "cendres", "hash", "matrix", "glitch"
 #   ou "cendres+glitch" (le mélange)
 EFFET = "cendres+glitch"
+# barres des 12 mois : "une-a-une" (chaque barre monte avec un rebond + son chiffre)
+#   ou "ensemble" (toutes montent presque en même temps, l'ancienne version)
+BARRES = "une-a-une"
 GH_USER = "CHRIISHEART"
 MOIS = ["janv", "févr", "mars", "avr", "mai", "juin", "juil", "août", "sept", "oct", "nov", "déc"]
 
@@ -116,6 +119,8 @@ BASE_CSS = """
 .r{opacity:0;animation:rise .8s cubic-bezier(.2,.7,.2,1) both;transform-box:fill-box}
 .f{opacity:0;animation:fade .9s ease-out both}
 .g{transform-box:fill-box;transform-origin:bottom;transform:scaleY(0);animation:grow .8s cubic-bezier(.2,.7,.2,1) both}
+@keyframes growb{0%{transform:scaleY(0)}65%{transform:scaleY(1.12)}82%{transform:scaleY(.96)}100%{transform:scaleY(1)}}
+.gb{transform-box:fill-box;transform-origin:bottom;transform:scaleY(0);animation:growb .7s cubic-bezier(.2,.7,.2,1) both}
 .p{opacity:0;transform-box:fill-box;transform-origin:center;animation:pop .4s ease-out both}
 .live{animation:pulse 1.6s ease-in-out infinite}
 .n{transform-box:fill-box;animation:nudge 1.8s ease-in-out infinite}
@@ -132,7 +137,7 @@ BASE_CSS = """
 .ro{transform-box:fill-box;animation:roll .8s cubic-bezier(.15,.8,.2,1) both}
 .sh{animation:sheen 5s ease-in-out infinite}
 .rg{opacity:0;transform-box:fill-box;transform-origin:center;animation:ring 1s ease-out both}
-@media (prefers-reduced-motion: reduce){.r,.f,.g,.p,.live,.n,.nu,.ti,.sl,.ai,.ro,.rg{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}}
+@media (prefers-reduced-motion: reduce){.r,.f,.g,.gb,.p,.live,.n,.nu,.ti,.sl,.ai,.ro,.rg{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}}
 """
 
 
@@ -358,6 +363,9 @@ def activity(data):
     top = max(best["total"], 1)
     x0, x1, base, maxh, gap = 40, 600, 292, 140, 10
     bw = (x1 - x0 - gap * (len(monthly) - 1)) / len(monthly)
+    une = BARRES == "une-a-une"
+    step = 0.28 if une else 0.07          # écart entre deux barres
+    rise = "gb" if une else "g"            # gb = montée avec rebond
     bars = []
     for i, m in enumerate(monthly):
         partial = i == len(monthly) - 1
@@ -367,16 +375,24 @@ def activity(data):
         fill = "url(#barR)" if is_best else "url(#barG)"
         glow = ' filter="url(#glowR)"' if is_best else ""
         label = MOIS[int(m["month"][5:7]) - 1]
+        t = 2.2 + i * step
         bars.append(
-            f'<rect class="g" style="animation-delay:{2.2 + i * 0.07:.2f}s" x="{x:.1f}" y="{base - bh}" '
+            f'<rect class="{rise}" style="animation-delay:{t:.2f}s" x="{x:.1f}" y="{base - bh}" '
             f'width="{bw:.1f}" height="{bh}" rx="5" fill="{fill}"{glow}><title>{label}: {m["total"]:,}</title></rect>'
-            f'<text class="f" style="animation-delay:{2.2 + i * 0.07:.2f}s" x="{x + bw / 2:.1f}" y="{base + 22}" '
+            f'<text class="f" style="animation-delay:{t:.2f}s" x="{x + bw / 2:.1f}" y="{base + 22}" '
             f'text-anchor="middle" font-family="{MONO}" font-size="11" fill="{MQ_SOFT}">{label}</text>'
         )
         if is_best:
+            t_best = (t + 0.6) if une else 3.2
             bars.append(
-                f'<text class="p" style="animation-delay:3.2s" x="{x + bw / 2:.1f}" y="{base - bh - 10}" '
+                f'<text class="p" style="animation-delay:{t_best:.2f}s" x="{x + bw / 2:.1f}" y="{base - bh - 10}" '
                 f'text-anchor="middle" font-family="{MONO}" font-size="12" fill="{MQ_R}">{m["total"]:,}</text>'
+            )
+        elif une and m["total"] > 0:
+            # petit chiffre qui apparaît au-dessus de la barre quand elle arrive
+            bars.append(
+                f'<text class="p" style="animation-delay:{t + 0.55:.2f}s" x="{x + bw / 2:.1f}" y="{base - bh - 8}" '
+                f'text-anchor="middle" font-family="{MONO}" font-size="10" fill="{MQ_SOFT}">{m["total"]:,}</text>'
             )
     cs = data["current_streak"]["length"]
     ls = data["longest_streak"]["length"]
