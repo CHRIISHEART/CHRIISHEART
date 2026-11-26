@@ -12,6 +12,8 @@
 @keyframes growb{0%{transform:scaleY(0)}65%{transform:scaleY(1.12)}82%{transform:scaleY(.96)}100%{transform:scaleY(1)}}
 .gb{transform-box:fill-box;transform-origin:bottom;transform:scaleY(0);animation:growb .7s cubic-bezier(.2,.7,.2,1) both}
 .p{opacity:0;transform-box:fill-box;transform-origin:center;animation:pop .4s ease-out both}
+@keyframes bubin{from{opacity:0;transform:translateY(6px) scale(.9)}to{opacity:1;transform:none}}
+.bp{opacity:0;transform-box:fill-box;animation:bubin .35s cubic-bezier(.23,1,.32,1) both}
 .live{animation:pulse 1.6s ease-in-out infinite}
 .n{transform-box:fill-box;animation:nudge 1.8s ease-in-out infinite}
 .nu{transform-box:fill-box;animation:nudgeup 1.8s ease-in-out infinite}
@@ -27,5 +29,5 @@
 .ro{transform-box:fill-box;animation:roll .8s cubic-bezier(.15,.8,.2,1) both}
 .sh{animation:sheen 5s ease-in-out infinite}
 .rg{opacity:0;transform-box:fill-box;transform-origin:center;animation:ring 1s ease-out both}
-@media (prefers-reduced-motion: reduce){.r,.f,.g,.gb,.p,.live,.n,.nu,.ti,.sl,.ai,.ro,.rg{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}}
+@media (prefers-reduced-motion: reduce){.r,.f,.g,.gb,.p,.bp,.live,.n,.nu,.ti,.sl,.ai,.ro,.rg{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}}
 </style><text class="r" style="animation-delay:4.40s" x="2" y="46" font-family="'Instrument Serif', Georgia, serif" font-size="34" fill="#e6edf3">Mes <tspan font-style="italic" fill="#ff4f3d">codes</tspan></text></svg>
