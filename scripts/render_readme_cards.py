@@ -17,6 +17,7 @@ Run by .github/workflows/update-profile-art.yml after fetch_contributions.py.
 import base64
 import datetime
 import json
+import math
 import os
 import re
 from html import escape
@@ -122,6 +123,8 @@ BASE_CSS = """
 @keyframes growb{0%{transform:scaleY(0)}65%{transform:scaleY(1.12)}82%{transform:scaleY(.96)}100%{transform:scaleY(1)}}
 .gb{transform-box:fill-box;transform-origin:bottom;transform:scaleY(0);animation:growb .7s cubic-bezier(.2,.7,.2,1) both}
 .p{opacity:0;transform-box:fill-box;transform-origin:center;animation:pop .4s ease-out both}
+@keyframes bubin{from{opacity:0;transform:translateY(6px) scale(.9)}to{opacity:1;transform:none}}
+.bp{opacity:0;transform-box:fill-box;animation:bubin .35s cubic-bezier(.23,1,.32,1) both}
 .live{animation:pulse 1.6s ease-in-out infinite}
 .n{transform-box:fill-box;animation:nudge 1.8s ease-in-out infinite}
 .nu{transform-box:fill-box;animation:nudgeup 1.8s ease-in-out infinite}
@@ -137,7 +140,7 @@ BASE_CSS = """
 .ro{transform-box:fill-box;animation:roll .8s cubic-bezier(.15,.8,.2,1) both}
 .sh{animation:sheen 5s ease-in-out infinite}
 .rg{opacity:0;transform-box:fill-box;transform-origin:center;animation:ring 1s ease-out both}
-@media (prefers-reduced-motion: reduce){.r,.f,.g,.gb,.p,.live,.n,.nu,.ti,.sl,.ai,.ro,.rg{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}}
+@media (prefers-reduced-motion: reduce){.r,.f,.g,.gb,.p,.bp,.live,.n,.nu,.ti,.sl,.ai,.ro,.rg{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}}
 """
 
 
@@ -480,7 +483,8 @@ def bubble(x, y, text, fill, fg, side, delay, w_char=7.4):
     bx = x if side == "gauche" else x - w
     tail = (f'M{bx + 4},{y + h - 6} q-2,7 -8,9 q9,0 15,-5 z' if side == "gauche"
             else f'M{bx + w - 4},{y + h - 6} q2,7 8,9 q-9,0 -15,-5 z')
-    return (f'<g class="p" {d(delay)}><path d="{tail}" fill="{fill}"/>'
+    origin = "left bottom" if side == "gauche" else "right bottom"   # la bulle sort de sa pointe
+    return (f'<g class="bp" style="animation-delay:{delay:.2f}s;transform-origin:{origin}"><path d="{tail}" fill="{fill}"/>'
             f'<rect x="{bx:.0f}" y="{y}" width="{w:.0f}" height="{h}" rx="16" fill="{fill}"/>'
             f'<text x="{bx + 14:.0f}" y="{y + 21}" font-family="{SANS}" font-size="14" fill="{fg}">{escape(text)}</text></g>')
 
@@ -492,7 +496,7 @@ def typing(x, y, delay):
         f'<animate attributeName="opacity" values=".3;1;.3" dur="1.2s" begin="{k * .2:.1f}s" repeatCount="indefinite"/>'
         f'<animateTransform attributeName="transform" type="translate" values="0 0;0 -3;0 0" dur="1.2s" begin="{k * .2:.1f}s" repeatCount="indefinite"/></circle>'
         for k in range(3))
-    return (f'<g class="p" {d(delay)}><path d="M{x + 4},{y + 26} q-2,7 -8,9 q9,0 15,-5 z" fill="{MQ_LINE}"/>'
+    return (f'<g class="bp" style="animation-delay:{delay:.2f}s;transform-origin:left bottom"><path d="M{x + 4},{y + 26} q-2,7 -8,9 q9,0 15,-5 z" fill="{MQ_LINE}"/>'
             f'<rect x="{x}" y="{y}" width="54" height="32" rx="16" fill="{MQ_LINE}"/>{dots}</g>')
 
 
@@ -909,79 +913,247 @@ def crab_svg():
 
 
 
-def bonhomme_svg():
+def bonhomme_svg(pose="marche", T=45.0, run=0.8, t_sit=0.83):
     """Petit bonhomme d'après ma photo : peau marron, cheveux bouclés courts et
     arrondis (ligne droite sur le front), sourcils froncés avec plis sur le front,
-    yeux qui regardent de côté, petite bouche qui boude, t-shirt noir col rond.
-    Il marche (jambes et bras) et croque (la bouche s'ouvre un peu)."""
+    t-shirt noir col rond.
+    pose="marche" : il marche (jambes et bras) et croque (la bouche s'ouvre un peu).
+    pose="assis"  : assis sous le cocotier, yeux fermés, un coco à la main, « Zzz ».
+    Dans les deux poses, son ventre gonfle pendant qu'il mange (0 → run) puis
+    dégonfle pendant la sieste (il digère)."""
+    import math
     skin, skin_d, hair, tee = "#a0673f", "#80502f", "#141414", "#1c1c1c"
-    limb = lambda x1, y1, x2, y2, col, w, a, dur: (
-        f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{col}" stroke-width="{w}" stroke-linecap="round">'
-        f'<animateTransform attributeName="transform" type="rotate" values="{a} {x1} {y1};{-a} {x1} {y1};{a} {x1} {y1}" '
-        f'dur="{dur}s" repeatCount="indefinite"/></line>')
+    walking = pose == "marche"
+
+    def limb(x1, y1, x2, y2, col, w, a, dur):
+        anim = (f'<animateTransform attributeName="transform" type="rotate" values="{a} {x1} {y1};{-a} {x1} {y1};{a} {x1} {y1}" '
+                f'dur="{dur}s" repeatCount="indefinite"/>' if walking else "")
+        return (f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{col}" stroke-width="{w}" stroke-linecap="round">'
+                f'{anim}</line>')
+
+    if walking:
+        limbs = (limb(-2.5, 8, -2.5, 13.5, "#0e0e0e", 2.6, 25, .45)
+                 + limb(2.5, 8, 2.5, 13.5, "#0e0e0e", 2.6, -25, .45)
+                 + limb(-6.2, 1.5, -8, 7.5, skin, 2.2, -30, .45)
+                 + limb(6.2, 1.5, 8, 7.5, skin, 2.2, 30, .45))
+    else:  # assis : jambes écartées vers l'avant, bras gauche posé
+        limbs = (limb(-2.5, 8, -7.5, 11.5, "#0e0e0e", 2.6, 0, 0)
+                 + limb(2.5, 8, 7.5, 11.5, "#0e0e0e", 2.6, 0, 0)
+                 + limb(-6.2, 1.5, -9, 7, skin, 2.2, 0, 0))
+
+    # ventre qui gonfle puis dégonfle (même horloge que le tour)
+    shirt = (f'<path d="M-7,3 Q-7,-0.5 -3.5,-0.8 L3.5,-0.8 Q7,-0.5 7,3 L7,9 Q7,10 6,10 L-6,10 Q-7,10 -7,9 Z" fill="{tee}"/>'
+             f'<path d="M-2.6,-0.8 Q0,1.6 2.6,-0.8" fill="none" stroke="#2c2c2c" stroke-width="1"/>')
+    belly = (f'<g transform="translate(0 4.6)"><g>'
+             f'<animateTransform attributeName="transform" type="scale" values="1 1;1.32 1.08;1.32 1.08;1 1;1 1" '
+             f'keyTimes="0;{run};{t_sit + .02:.3f};.97;1" dur="{T}s" repeatCount="indefinite"/>'
+             f'<g transform="translate(0 -4.6)">{shirt}</g></g></g>')
+
     # cheveux bouclés : un dôme + petites boucles sur le contour
-    curls = "".join(f'<circle cx="{7.4 * __import__("math").cos(a):.2f}" cy="{-10 + 7.2 * __import__("math").sin(a):.2f}" r="2.2" fill="{hair}"/>'
-                    for a in [__import__("math").radians(d) for d in range(180, 361, 22)])
-    return (
-        '<g>'
-        f'<animateTransform attributeName="transform" type="translate" values="0,1.5;0,0.3;0,1.5" dur=".45s" repeatCount="indefinite"/>'
-        '<g transform="scale(1.0)">'
-        # jambes et bras (derrière le corps)
-        + limb(-2.5, 8, -2.5, 13.5, "#0e0e0e", 2.6, 25, .45)
-        + limb(2.5, 8, 2.5, 13.5, "#0e0e0e", 2.6, -25, .45)
-        + limb(-6.2, 1.5, -8, 7.5, skin, 2.2, -30, .45)
-        + limb(6.2, 1.5, 8, 7.5, skin, 2.2, 30, .45)
-        # t-shirt noir, col rond
-        + f'<path d="M-7,3 Q-7,-0.5 -3.5,-0.8 L3.5,-0.8 Q7,-0.5 7,3 L7,9 Q7,10 6,10 L-6,10 Q-7,10 -7,9 Z" fill="{tee}"/>'
-        f'<path d="M-2.6,-0.8 Q0,1.6 2.6,-0.8" fill="none" stroke="#2c2c2c" stroke-width="1"/>'
-        # cou
-        + f'<rect x="-1.6" y="-2.6" width="3.2" height="2.4" fill="{skin_d}"/>'
-        # cheveux (derrière la tête) + oreilles + visage
-        + f'<ellipse cx="0" cy="-10.5" rx="7.6" ry="6.8" fill="{hair}"/>{curls}'
-        f'<ellipse cx="-6.4" cy="-6.8" rx="1.7" ry="2.2" fill="{skin}"/><ellipse cx="6.4" cy="-6.8" rx="1.7" ry="2.2" fill="{skin}"/>'
-        f'<ellipse cx="-6.4" cy="-6.8" rx=".8" ry="1.2" fill="{skin_d}"/><ellipse cx="6.4" cy="-6.8" rx=".8" ry="1.2" fill="{skin_d}"/>'
-        f'<path d="M-6,-9.5 L6,-9.5 L5.8,-4 Q5,0 0,0.6 Q-5,0 -5.8,-4 Z" fill="{skin}"/>'
-        # ligne des cheveux bien droite
-        f'<rect x="-6.2" y="-11.2" width="12.4" height="2" fill="{hair}"/>'
-        # plis de froncement au milieu du front
-        f'<path d="M-0.9,-9 Q-0.4,-7.6 -0.9,-6.6 M0.9,-9 Q0.4,-7.6 0.9,-6.6" stroke="{skin_d}" stroke-width=".55" fill="none"/>'
-        # sourcils épais froncés
-        '<path d="M-5,-7.4 Q-3,-7.9 -1.1,-6.3 M5,-7.4 Q3,-7.9 1.1,-6.3" stroke="#111" stroke-width="1.2" stroke-linecap="round" fill="none"/>'
-        # yeux en amande qui regardent sur le côté
-        '<path d="M-4.6,-5.2 Q-2.8,-6.2 -1.2,-5.2 Q-2.8,-4.3 -4.6,-5.2 Z" fill="#fff" stroke="#111" stroke-width=".4"/>'
-        '<path d="M4.6,-5.2 Q2.8,-6.2 1.2,-5.2 Q2.8,-4.3 4.6,-5.2 Z" fill="#fff" stroke="#111" stroke-width=".4"/>'
-        '<circle cx="-1.9" cy="-5.2" r=".75" fill="#111"/><circle cx="3.6" cy="-5.2" r=".75" fill="#111"/>'
-        # nez
-        f'<path d="M-0.8,-2.6 Q0,-2 0.8,-2.6" stroke="{skin_d}" stroke-width=".6" fill="none"/>'
-        # petite bouche qui boude (et croque un peu)
-        '<ellipse cx="0" cy="-1.1" rx="1.2" ry=".35" fill="#5a2a1a">'
-        '<animate attributeName="ry" values=".3;.9;.3" dur=".45s" repeatCount="indefinite"/></ellipse>'
-        '</g></g>')
+    curls = "".join(f'<circle cx="{7.4 * math.cos(a):.2f}" cy="{-10 + 7.2 * math.sin(a):.2f}" r="2.2" fill="{hair}"/>'
+                    for a in [math.radians(d) for d in range(180, 361, 22)])
+    if walking:
+        eyes = ('<path d="M-4.6,-5.2 Q-2.8,-6.2 -1.2,-5.2 Q-2.8,-4.3 -4.6,-5.2 Z" fill="#fff" stroke="#111" stroke-width=".4"/>'
+                '<path d="M4.6,-5.2 Q2.8,-6.2 1.2,-5.2 Q2.8,-4.3 4.6,-5.2 Z" fill="#fff" stroke="#111" stroke-width=".4"/>'
+                '<circle cx="-1.9" cy="-5.2" r=".75" fill="#111"/><circle cx="3.6" cy="-5.2" r=".75" fill="#111"/>')
+        mouth = ('<ellipse cx="0" cy="-1.1" rx="1.2" ry=".35" fill="#5a2a1a">'
+                 '<animate attributeName="ry" values=".3;.9;.3" dur=".45s" repeatCount="indefinite"/></ellipse>')
+    else:  # yeux fermés, petite bouche tranquille
+        eyes = '<path d="M-4.4,-5 Q-2.9,-4.1 -1.4,-5 M4.4,-5 Q2.9,-4.1 1.4,-5" stroke="#111" stroke-width=".7" stroke-linecap="round" fill="none"/>'
+        mouth = '<ellipse cx="0" cy="-1.1" rx=".9" ry=".3" fill="#5a2a1a"/>'
+
+    face = (f'<rect x="-1.6" y="-2.6" width="3.2" height="2.4" fill="{skin_d}"/>'
+            f'<ellipse cx="0" cy="-10.5" rx="7.6" ry="6.8" fill="{hair}"/>{curls}'
+            f'<ellipse cx="-6.4" cy="-6.8" rx="1.7" ry="2.2" fill="{skin}"/><ellipse cx="6.4" cy="-6.8" rx="1.7" ry="2.2" fill="{skin}"/>'
+            f'<ellipse cx="-6.4" cy="-6.8" rx=".8" ry="1.2" fill="{skin_d}"/><ellipse cx="6.4" cy="-6.8" rx=".8" ry="1.2" fill="{skin_d}"/>'
+            f'<path d="M-6,-9.5 L6,-9.5 L5.8,-4 Q5,0 0,0.6 Q-5,0 -5.8,-4 Z" fill="{skin}"/>'
+            f'<rect x="-6.2" y="-11.2" width="12.4" height="2" fill="{hair}"/>'
+            f'<path d="M-0.9,-9 Q-0.4,-7.6 -0.9,-6.6 M0.9,-9 Q0.4,-7.6 0.9,-6.6" stroke="{skin_d}" stroke-width=".55" fill="none"/>'
+            '<path d="M-5,-7.4 Q-3,-7.9 -1.1,-6.3 M5,-7.4 Q3,-7.9 1.1,-6.3" stroke="#111" stroke-width="1.2" stroke-linecap="round" fill="none"/>'
+            f'{eyes}'
+            f'<path d="M-0.8,-2.6 Q0,-2 0.8,-2.6" stroke="{skin_d}" stroke-width=".6" fill="none"/>'
+            f'{mouth}')
+
+    if walking:
+        bob = '<animateTransform attributeName="transform" type="translate" values="0,1.5;0,0.3;0,1.5" dur=".45s" repeatCount="indefinite"/>'
+        return f'<g>{bob}{limbs}{belly}{face}</g>'
+
+    # assis : bras droit qui tient un coco (avec sa paille) + des « Zzz » qui montent
+    coco = (f'<line x1="6.2" y1="1.5" x2="9.4" y2="4.6" stroke="{skin}" stroke-width="2.2" stroke-linecap="round"/>'
+            '<circle cx="11.2" cy="4" r="3.3" fill="#6b4423"/><circle cx="10.2" cy="3" r="1" fill="#8d6038"/>'
+            f'<line x1="11.6" y1="1" x2="12.8" y2="-4" stroke="{MQ_R}" stroke-width=".9" stroke-linecap="round"/>')
+    zzz = "".join(
+        f'<text x="{6 + i * 4.5}" y="{-15 - i * 5}" font-family="{SANS}" font-weight="600" font-size="{5 + i * 1.8:.1f}" '
+        f'fill="{MQ_TXT}" opacity="0">z'
+        f'<animate attributeName="opacity" values="0;.9;0" dur="2.4s" begin="{i * .6:.1f}s" repeatCount="indefinite"/>'
+        f'<animateTransform attributeName="transform" type="translate" values="0 2;2 -3" dur="2.4s" begin="{i * .6:.1f}s" repeatCount="indefinite"/></text>'
+        for i in range(3))
+    return f'<g>{limbs}{belly}{face}{coco}{zzz}</g>'
+
+
+MADRAS_DEFS = (
+    # petit motif madras (carreaux jaune / rouge / vert / orange) pour le chapeau et le foulard
+    '<pattern id="madras" width="4" height="4" patternUnits="userSpaceOnUse">'
+    '<rect width="4" height="4" fill="#f2c200"/>'
+    '<rect width="4" height="1.4" fill="#d7263d" opacity=".85"/>'
+    '<rect width="1.4" height="4" fill="#1fa35b" opacity=".8"/>'
+    '<rect x="2.6" width=".5" height="4" fill="#e8742a"/></pattern>')
+
+
+def compagnon_svg(pose="marche"):
+    """Claude en vrai petit personnage (perso original, pas le logo) : peau
+    terracotta (la couleur de Claude), grands yeux, sourire, joues roses ;
+    tenue antillaise : chapeau bakoua avec ruban madras, chemise madras,
+    pantalon blanc et sandales.
+    pose="marche" : il marche (jambes et bras). pose="assis" : il se balance,
+    yeux fermés, et des notes de musique s'envolent (ambiance zouk)."""
+    skin, skin_d, straw, straw_d = "#d97757", "#b85f43", "#e6c77e", "#b8964d"
+    pants, sandal = "#f1efe8", "#7a4a24"
+    walking = pose == "marche"
+
+    def limb(x1, y1, x2, y2, col, w, a, begin=0):
+        anim = (f'<animateTransform attributeName="transform" type="rotate" values="{a} {x1} {y1};{-a} {x1} {y1};{a} {x1} {y1}" '
+                f'dur=".45s" begin="{begin}s" repeatCount="indefinite"/>' if walking else "")
+        return (f'<g>{anim}<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{col}" stroke-width="{w}" stroke-linecap="round"/>'
+                f'<ellipse cx="{x2}" cy="{y2 + .8}" rx="1.9" ry=".9" fill="{sandal}"/></g>' if col == pants else
+                f'<g>{anim}<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{col}" stroke-width="{w}" stroke-linecap="round"/></g>')
+
+    if walking:
+        legs = limb(-2.4, 8, -2.4, 13.6, pants, 2.8, 25, .22) + limb(2.4, 8, 2.4, 13.6, pants, 2.8, -25, .22)
+        arms = limb(-6.3, 1.6, -8.2, 7.6, skin, 2.2, -30, .22) + limb(6.3, 1.6, 8.2, 7.6, skin, 2.2, 30, .22)
+    else:  # assis : jambes vers l'avant, une main levée qui bat la mesure
+        legs = limb(-2.4, 8, -7.6, 11.4, pants, 2.8, 0) + limb(2.4, 8, 7.6, 11.4, pants, 2.8, 0)
+        arms = (limb(-6.3, 1.6, -9, 7, skin, 2.2, 0)
+                + f'<g><animateTransform attributeName="transform" type="rotate" values="0 6.3 1.6;-25 6.3 1.6;0 6.3 1.6" dur=".7s" repeatCount="indefinite"/>'
+                  f'<line x1="6.3" y1="1.6" x2="10" y2="-2.5" stroke="{skin}" stroke-width="2.2" stroke-linecap="round"/></g>')
+
+    # chemise madras à manches courtes, col en V
+    shirt = ('<path d="M-7.2,3 Q-7.2,-0.6 -3.6,-0.9 L3.6,-0.9 Q7.2,-0.6 7.2,3 L7.2,9 Q7.2,10 6.2,10 L-6.2,10 Q-7.2,10 -7.2,9 Z" '
+             'fill="url(#madras)" stroke="#b81f33" stroke-width=".35"/>'
+             f'<path d="M-2.4,-0.9 L0,2.6 L2.4,-0.9 Z" fill="{skin}"/>'
+             '<path d="M-7.2,1.2 L-9,3.6 L-6.6,4.6 Z M7.2,1.2 L9,3.6 L6.6,4.6 Z" fill="url(#madras)"/>'
+             '<circle cx="0" cy="4.6" r=".5" fill="#fff"/><circle cx="0" cy="7" r=".5" fill="#fff"/>')
+    neck = f'<rect x="-1.5" y="-2.8" width="3" height="2.4" fill="{skin_d}"/>'
+    head = (f'<ellipse cx="-6.3" cy="-7" rx="1.5" ry="2" fill="{skin}"/><ellipse cx="6.3" cy="-7" rx="1.5" ry="2" fill="{skin}"/>'
+            f'<ellipse cx="0" cy="-7.6" rx="6.4" ry="6.6" fill="{skin}"/>'
+            '<circle cx="-4" cy="-4.8" r="1.3" fill="#ff8f8f" opacity=".55"/><circle cx="4" cy="-4.8" r="1.3" fill="#ff8f8f" opacity=".55"/>')
+    if walking:
+        eyes = ('<ellipse cx="-2.4" cy="-7.4" rx="1.4" ry="1.7" fill="#fff"/><ellipse cx="2.4" cy="-7.4" rx="1.4" ry="1.7" fill="#fff"/>'
+                '<circle cx="-2.1" cy="-7.2" r=".85" fill="#2b1a12"/><circle cx="2.7" cy="-7.2" r=".85" fill="#2b1a12"/>'
+                '<circle cx="-1.8" cy="-7.6" r=".3" fill="#fff"/><circle cx="3" cy="-7.6" r=".3" fill="#fff"/>')
+    else:
+        eyes = '<path d="M-3.6,-7.2 Q-2.4,-8.4 -1.2,-7.2 M1.2,-7.2 Q2.4,-8.4 3.6,-7.2" stroke="#2b1a12" stroke-width=".7" stroke-linecap="round" fill="none"/>'
+    mouth = '<path d="M-1.8,-4.4 Q0,-2.6 1.8,-4.4" stroke="#5a2a1a" stroke-width=".7" stroke-linecap="round" fill="none"/>'
+    # chapeau bakoua : cône de paille pointu + ruban madras
+    hat = (f'<path d="M-10.5,-11.6 Q0,-14.4 10.5,-11.6 L0,-22.6 Z" fill="{straw}" stroke="{straw_d}" stroke-width=".5"/>'
+           f'<path d="M-3.2,-19.4 L3.2,-19.4 M-6,-16.2 L6,-16.2" stroke="{straw_d}" stroke-width=".45"/>'
+           f'<path d="M-7.4,-13.4 Q0,-15.6 7.4,-13.4 L6.8,-12 Q0,-14.1 -6.8,-12 Z" fill="url(#madras)"/>'
+           f'<circle cx="0" cy="-23" r="1" fill="{straw_d}"/>')
+    perso = f'{legs}{arms}{shirt}{neck}{head}{eyes}{mouth}{hat}'
+    if walking:
+        bob = '<animateTransform attributeName="transform" type="translate" values="0,0.3;0,1.5;0,0.3" dur=".45s" repeatCount="indefinite"/>'
+        return f'<g>{bob}{perso}</g>'
+    notes = "".join(
+        f'<text x="{-12 - i * 3}" y="{-16 - i * 4}" font-size="{7 + i}" fill="{["#f2c200", "#1fcf8a", "#ff4f3d"][i]}" opacity="0">{"♪♫♪"[i]}'
+        f'<animate attributeName="opacity" values="0;1;0" dur="2.1s" begin="{i * .7:.1f}s" repeatCount="indefinite"/>'
+        f'<animateTransform attributeName="transform" type="translate" values="0 2;-3 -6" dur="2.1s" begin="{i * .7:.1f}s" repeatCount="indefinite"/></text>'
+        for i in range(3))
+    sway = '<animateTransform attributeName="transform" type="rotate" values="-4 0 9;4 0 9;-4 0 9" dur="1.4s" repeatCount="indefinite"/>'
+    return f'<g><g>{sway}{perso}</g>{notes}</g>'
+
+
+def cocotier(x, ground):
+    """Petit cocotier (tronc penché, palmes qui se balancent, 2 cocos) + sable."""
+    top_x, top_y = x - 5, ground - 40
+    trunk = (f'<path d="M{x},{ground} Q{x + 3},{ground - 22} {top_x},{top_y}" fill="none" stroke="#8a5a2b" '
+             f'stroke-width="4.5" stroke-linecap="round"/>'
+             + "".join(f'<path d="M{x - 2.2 + k * .2:.1f},{ground - 6 - k * 7} l4.6,-1" stroke="#6b4423" stroke-width="1"/>' for k in range(5)))
+    leaf = lambda ang, ln: (
+        f'<path transform="rotate({ang} {top_x} {top_y})" d="M{top_x},{top_y} q{ln * .5},{-9} {ln},2 '
+        f'q{-ln * .5},{-3} {-ln},-2 z" fill="{MQ_G}"/>')
+    leaves = "".join(leaf(a, 19) for a in (-160, -120, -60, -20, 20))
+    return (f'<ellipse cx="{x - 8}" cy="{ground + 1}" rx="26" ry="3.5" fill="#c9a66b" opacity=".22"/>'
+            f'{trunk}<g>'
+            f'<animateTransform attributeName="transform" type="rotate" values="-3 {top_x} {top_y};3 {top_x} {top_y};-3 {top_x} {top_y}" '
+            f'dur="3.2s" repeatCount="indefinite"/>{leaves}'
+            f'<circle cx="{top_x - 2}" cy="{top_y + 3}" r="2.4" fill="#6b4423"/><circle cx="{top_x + 2.5}" cy="{top_y + 3.5}" r="2.4" fill="#7a4a24"/></g>')
+
+
+# petites phrases en créole martiniquais, au-dessus de sa tête pendant qu'il mange
+# (moment dans le tour, de 0 à 1 ; texte)
+# (moment dans le tour de 0 à 1, + secondes de décalage, texte)
+PHRASES = [(0.12, 0, "An faim fow réel !"), (0.12, 5.0, "Sa vré boss !"), (0.48, 0, "Bon bagay ! 😋")]
+
+
+def bulle_creole(text, t0, T, show=2.2, fill="#e9fff5", fg="#0d1117", side="droite", top=-43):
+    """Bulle au-dessus d'un perso, qui sort de sa pointe. side="droite" : la bulle
+    part vers la droite (pointe en bas à gauche) ; "gauche" : l'inverse.
+    top : hauteur du haut de la bulle (plus haut pour Claude et son chapeau)."""
+    # largeur mesurée sur la police Geist 600 en 11 px (~5,1 px par lettre),
+    # les emojis sont plus larges ; 8 px de marge de chaque côté
+    emo = sum(ord(ch) > 0x2000 for ch in text)
+    w = (len(text) - emo) * 5.1 + emo * 15 + 16
+    t1 = min(t0 + show / T, .98)                     # reste dans le tour (même en aperçu rapide)
+    fade = min(.25 / T, (t1 - t0) / 3)
+    kt = f"0;{t0:.4f};{t0 + fade:.4f};{t1 - fade:.4f};{t1:.4f};1"
+    yb = top + 18                                    # bas de la bulle
+    if side == "droite":
+        rx, tail = -8, f"M-1,{yb} q-1,5 -5,7 q7,0 11,-6 z"
+    else:
+        rx, tail = 8 - w, f"M1,{yb} q1,5 5,7 q-7,0 -11,-6 z"
+    return (f'<g opacity="0">'
+            f'<animate attributeName="opacity" values="0;0;1;1;0;0" keyTimes="{kt}" dur="{T}s" repeatCount="indefinite"/>'
+            f'<animateTransform attributeName="transform" type="translate" values="0 4;0 4;0 0;0 0;0 -2;0 -2" keyTimes="{kt}" '
+            f'dur="{T}s" repeatCount="indefinite"/>'
+            f'<path d="{tail}" fill="{fill}"/>'
+            f'<rect x="{rx:.0f}" y="{top}" width="{w:.0f}" height="19" rx="9.5" fill="{fill}"/>'
+            f'<text x="{rx + 8:.0f}" y="{top + 13.5}" font-family="{SANS}" font-weight="600" font-size="11" fill="{fg}">{escape(text)}</text></g>')
+
+
+# ce que Claude répond (un peu après moi), et ce qu'il dit sous le cocotier
+# (même format) : Claude parle 2,5 s après ma première bulle, puis je lui réponds
+REPONSES = [(0.12, 2.5, "Ni an pyé koko la !"), (0.48, 2.5, "Sé vré menm !")]
+# ce que Claude dit sous le cocotier : (secondes après qu'il s'est assis, texte)
+PHRASE_SIESTE = [(0.4, "Je t'avais dit ça bon !"), (3.4, "Maintenant je vais râler une douss 😴")]
 
 
 def heatmap_crab(data):
-    """Panneau « Chaque jour, en vert » : un crabe parcourt la grille colonne par
-    colonne (en zigzag) et mange les cases vertes, puis tout recommence."""
+    """Panneau « Chaque jour, en vert » : le bonhomme (ou le crabe) parcourt la
+    grille colonne par colonne (en zigzag) et mange les cases vertes. Le bonhomme
+    grossit, lâche des phrases en créole et des « +N » sur les gros jours, puis va
+    faire la sieste sous un cocotier pendant que les cases repoussent."""
     days = data["days"]
     first = datetime.date.fromisoformat(days[0]["date"])
     lead = (first.weekday() + 1) % 7
-    cell, step, gx, gy = 12, 15, 44, 96
+    cell, step, gx, gy = 12, 15, 44, 110
     ncols = (len(days) + lead + 6) // 7
+    perso = CHASSEUR == "bonhomme"
     # trajet en zigzag : descend la colonne 0, remonte la 1, etc.
     order = []
     for col in range(ncols):
         rows = range(7) if col % 2 == 0 else range(6, -1, -1)
         order += [(col, r) for r in rows]
     n = len(order)
-    T = 45.0                         # durée d'un tour complet (s) : il marche tranquillement
-    run = 0.9                        # part du tour où le crabe marche, le reste = pause
+    T = float(os.environ.get("TOUR", 45))   # durée d'un tour complet (s) ; TOUR=12 pour un aperçu rapide
+    run = 0.80 if perso else 0.9     # part du tour où il mange
+    t_sit = 0.83                     # il arrive au cocotier
+    t_wake = 0.985                   # fin de la sieste
     when = {cr: i / (n - 1) * run for i, cr in enumerate(order)}
     cx = lambda c: gx + c * step + cell / 2
     cy = lambda r: gy + r * step + cell / 2
-    pts = " ".join(f"{cx(c):.1f},{cy(r):.1f}" for c, r in order)
-    path = "M" + " L".join(f"{cx(c):.1f},{cy(r):.1f}" for c, r in order)
+    pts = [(cx(c), cy(r)) for c, r in order]
+    ground = gy + 7 * step + 40
+    tree_x = gx + ncols * step + 12
+    sit = (tree_x - 26, ground - 11)
+
+    # repousse en vague de gauche à droite pendant la sieste (ou la pause du crabe)
+    w0, w1 = (t_sit + .015, .95) if perso else (run, run + .07)
 
     cells, months, seen = [], [], set()
+    counts = sorted((d["count"] for d in days if d["count"]), reverse=True)
+    seuil = counts[min(len(counts) - 1, 40)] if counts else 1   # ~40 plus gros jours → « +N »
+    seuil = max(seuil, 2)
+    plus = []
     for i, day in enumerate(days):
         col, row = divmod(i + lead, 7)
         date = datetime.date.fromisoformat(day["date"])
@@ -995,26 +1167,81 @@ def heatmap_crab(data):
             continue
         k = when[(col, row)]
         e = min(k + 0.004, 0.999)
-        # case verte : visible, mangée quand le crabe passe, revient au tour suivant
+        # case verte : croquée quand il passe (elle rétrécit et s'efface),
+        # puis repousse en vague de gauche à droite
+        k2 = k + 0.3 / T                              # 0,3 s pour rétrécir
+        b = w0 + col / ncols * (w1 - w0)              # moment où elle repousse
+        b2 = b + 0.5 / T                              # 0,5 s pour repousser
+        kt = f"0;{k:.4f};{k2:.4f};{b:.4f};{b2:.4f};1"
+        sp = "0 0 1 1;.23 1 .32 1;0 0 1 1;.23 1 .32 1;0 0 1 1"   # courbe vive (ease-out fort)
+        h2 = cell / 2
         cells.append(
             f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="3" fill="{MQ_EMPTY}"/>'
-            f'<rect x="{x}" y="{y}" width="{cell}" height="{cell}" rx="3" fill="{MQ_LEVELS[level_for(c)]}">'
-            f'<animate attributeName="opacity" values="1;1;0;0;1" keyTimes="0;{k:.4f};{e:.4f};.985;1" '
+            f'<g transform="translate({x + h2} {y + h2})">'
+            f'<rect x="{-h2}" y="{-h2}" width="{cell}" height="{cell}" rx="3" fill="{MQ_LEVELS[level_for(c)]}">'
+            f'<animate attributeName="opacity" values="1;1;0;0;1;1" keyTimes="{kt}" calcMode="spline" keySplines="{sp}" '
             f'dur="{T}s" repeatCount="indefinite"/>'
-            f'<title>{day["date"]}: {c} contribution{"s" if c != 1 else ""}</title></rect>'
+            f'<animateTransform attributeName="transform" type="scale" values="1;1;.35;.6;1;1" keyTimes="{kt}" '
+            f'calcMode="spline" keySplines="{sp}" dur="{T}s" repeatCount="indefinite"/>'
+            f'<title>{day["date"]}: {c} contribution{"s" if c != 1 else ""}</title></rect></g>'
             # petit éclat rouge au moment où il croque
             f'<circle cx="{x + cell / 2}" cy="{y + cell / 2}" r="3" fill="none" stroke="{MQ_R}" opacity="0">'
             f'<animate attributeName="opacity" values="0;0;.9;0;0" keyTimes="0;{k:.4f};{e:.4f};{min(e + .02, .99):.4f};1" dur="{T}s" repeatCount="indefinite"/>'
             f'<animate attributeName="r" values="3;3;3;12;12" keyTimes="0;{k:.4f};{e:.4f};{min(e + .02, .99):.4f};1" dur="{T}s" repeatCount="indefinite"/></circle>'
         )
+        if perso and c >= seuil:
+            # « +N » qui s'envole sur les gros jours
+            p1, p2 = k + .3 / T, k + 1.2 / T
+            pk = f"0;{k:.4f};{p1:.4f};{p2:.4f};1"
+            plus.append(
+                f'<text x="{x + h2}" y="{y - 2}" text-anchor="middle" font-family="{MONO}" font-weight="600" font-size="10" '
+                f'fill="#8ff3c6" opacity="0">+{c}'
+                f'<animate attributeName="opacity" values="0;0;1;0;0" keyTimes="{pk}" dur="{T}s" repeatCount="indefinite"/>'
+                f'<animateTransform attributeName="transform" type="translate" values="0 0;0 0;0 -6;0 -18;0 -18" keyTimes="{pk}" '
+                f'dur="{T}s" repeatCount="indefinite"/></text>')
     right = gx + ncols * step - 3
     labels = "".join(
         f'<text x="{gx + col * step}" y="{gy + 7 * step + 16}" font-family="{MONO}" font-size="11" fill="{MQ_SOFT}">{m}</text>'
         for col, m in months if col < ncols - 12)
-    who = bonhomme_svg() if CHASSEUR == "bonhomme" else crab_svg()
-    crab = (f'<g>{who}<animateMotion path="{path}" dur="{T}s" repeatCount="indefinite" '
-            f'keyPoints="0;1;1" keyTimes="0;{run};1" calcMode="linear"/></g>')
-    h = gy + 7 * step + 44
+
+    if perso:
+        # trajet : la grille en zigzag, puis il marche jusqu'au cocotier
+        L1 = sum(math.dist(pts[i], pts[i + 1]) for i in range(len(pts) - 1))
+        L2 = math.dist(pts[-1], sit)
+        f = L1 / (L1 + L2)
+        path = "M" + " L".join(f"{px:.1f},{py:.1f}" for px, py in pts + [sit])
+        bulles = "".join(bulle_creole(t, t0 + dt / T, T) for t0, dt, t in PHRASES)
+        walker = (f'<g>{bonhomme_svg("marche", T, run, t_sit)}{bulles}'
+                  f'<animateMotion path="{path}" dur="{T}s" repeatCount="indefinite" '
+                  f'keyPoints="0;{f:.4f};1;1" keyTimes="0;{run};{t_sit};1" calcMode="linear"/>'
+                  f'<animate attributeName="opacity" values="1;0" keyTimes="0;{t_sit}" calcMode="discrete" dur="{T}s" repeatCount="indefinite"/></g>')
+        sitter = (f'<g transform="translate({sit[0]:.1f} {sit[1] + 1:.1f})" opacity="0">{bonhomme_svg("assis", T, run, t_sit)}'
+                  f'<animate attributeName="opacity" values="0;1;0" keyTimes="0;{t_sit};{t_wake}" calcMode="discrete" dur="{T}s" repeatCount="indefinite"/></g>')
+        # compagnon inspiré de Claude : il suit quelques cases derrière, puis s'assoit à côté
+        lag = 7 / (n - 1) * run                       # retard de 7 cases
+        sit2 = (sit[0] - 24, sit[1] + 2)
+        L2b = math.dist(pts[-1], sit2)
+        f2 = L1 / (L1 + L2b)
+        path2 = "M" + " L".join(f"{px:.1f},{py:.1f}" for px, py in pts + [sit2])
+        t_sit2 = t_sit + lag
+        CL, CL_TXT = "#d97757", "#ffffff"               # bulles de Claude : terracotta
+        rep = "".join(bulle_creole(txt, t0 + dt / T, T, fill=CL, fg=CL_TXT, top=-49)
+                      for t0, dt, txt in REPONSES)
+        dodo = "".join(bulle_creole(txt, t_sit2 + dt / T, T, show=2.8, fill=CL, fg=CL_TXT, side="gauche", top=-49)
+                       for dt, txt in PHRASE_SIESTE)
+        pote = (f'<g>{compagnon_svg("marche")}{rep}'
+                f'<animateMotion path="{path2}" dur="{T}s" repeatCount="indefinite" '
+                f'keyPoints="0;0;{f2:.4f};1;1" keyTimes="0;{lag:.4f};{run + lag:.4f};{t_sit2:.4f};1" calcMode="linear"/>'
+                f'<animate attributeName="opacity" values="1;0" keyTimes="0;{t_sit2:.4f}" calcMode="discrete" dur="{T}s" repeatCount="indefinite"/></g>'
+                f'<g transform="translate({sit2[0]:.1f} {sit2[1]:.1f})" opacity="0">{compagnon_svg("assis")}{dodo}'
+                f'<animate attributeName="opacity" values="0;1;0" keyTimes="0;{t_sit2:.4f};{t_wake}" calcMode="discrete" dur="{T}s" repeatCount="indefinite"/></g>')
+        chasseur = f'<defs>{MADRAS_DEFS}</defs>' + cocotier(tree_x, ground) + pote + walker + sitter
+        h = ground + 14
+    else:
+        path = "M" + " L".join(f"{px:.1f},{py:.1f}" for px, py in pts)
+        chasseur = (f'<g>{crab_svg()}<animateMotion path="{path}" dur="{T}s" repeatCount="indefinite" '
+                    f'keyPoints="0;1;1" keyTimes="0;{run};1" calcMode="linear"/></g>')
+        h = gy + 7 * step + 44
     body = f"""
 {glass_panel(W, h)}
 <text class="r" {d(0.8)} x="42" y="62" font-family="{SERIF}" font-size="34" fill="{MQ_TXT}">Chaque jour, <tspan font-style="italic" fill="{MQ_G}">en vert</tspan></text>
@@ -1022,10 +1249,11 @@ def heatmap_crab(data):
 <text x="{right}" y="60" text-anchor="end" font-family="{MONO}" font-size="12" letter-spacing="1" fill="{MQ_SOFT}">MIS À JOUR CHAQUE JOUR</text></g>
 {''.join(cells)}
 <g class="f" {d(1.2)}>{labels}</g>
-{crab}
+{chasseur}
+{''.join(plus)}
 """
-    write("heatmap.svg", svg(W, h, body, ["serif", "serif-i", "mono"],
-                             f'{"Mon petit bonhomme" if CHASSEUR == "bonhomme" else "Un crabe"} mange ma grille : {data["total_contributions"]:,} contributions sur un an'))
+    write("heatmap.svg", svg(W, h, body, ["serif", "serif-i", "sans", "mono"],
+                             f'{"Mon petit bonhomme" if perso else "Un crabe"} mange ma grille : {data["total_contributions"]:,} contributions sur un an'))
 
 
 def heatmap_snake(data):
