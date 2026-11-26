@@ -168,7 +168,7 @@ def svg(w, h, body, fonts, label, extra_css="", left=0, right=0, bottom=BOTTOM):
     w, h = w + left + right, h + bottom
     css = font_face(fonts) + BASE_CSS + extra_css
     if os.environ.get("STATIC"):  # preview: show every animation at its end state
-        css += ".r,.f,.g,.p,.live,.n,.nu,.ti,.sl,.ai,.ro{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}"
+        css += ".r,.f,.g,.gb,.p,.bp,.live,.n,.nu,.ti,.sl,.ai,.ro{animation:none!important;opacity:1!important;transform:none!important}.sh,.rg{display:none}"
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" width="{w:.3f}" height="{h}" viewBox="0 0 {w:.3f} {h}" '
         f'role="img" aria-label="{escape(label)}"><title>{escape(label)}</title>'
@@ -527,13 +527,58 @@ def repo_card(i, name, desc, lang, color, stars):
                                   left=6 * i, right=6 - 6 * i))
 
 
-def section_title(text, italic, theme):
+def section_title(text, italic, theme, slug="coding", delay=4.4, color=MQ_R):
     fg = "#e6edf3" if theme == "dark" else INK
     body = (
-        f'<text class="r" {d(4.4)} x="2" y="46" font-family="{SERIF}" font-size="34" fill="{fg}">{escape(text)} '
-        f'<tspan font-style="italic" fill="{MQ_R}">{escape(italic)}</tspan></text>'
+        f'<text class="r" {d(delay)} x="2" y="46" font-family="{SERIF}" font-size="34" fill="{fg}">{escape(text)} '
+        f'<tspan font-style="italic" fill="{color}">{escape(italic)}</tspan></text>'
     )
-    write(f"title-coding-{theme}.svg", svg(W, 64, body, ["serif", "serif-i"], f"{text} {italic}", bottom=0))
+    write(f"title-{slug}-{theme}.svg", svg(W, 64, body, ["serif", "serif-i"], f"{text} {italic}", bottom=0))
+
+
+# ---- réseaux sociaux (cartes cliquables tout en bas) ---------------------------
+# (nom du fichier, réseau, pseudo affiché, lien) : le lien est mis dans le README
+RESEAUX = [
+    ("instagram", "INSTAGRAM", "@9koobe", "https://www.instagram.com/9koobe/"),
+    ("linkedin", "LINKEDIN", "Christopher Zamy", "https://www.linkedin.com/in/christopher-zamy-a993481b2/"),
+]
+
+
+def icon_instagram(x, y, size=48):
+    """Logo Instagram avec ses vraies couleurs (dégradé jaune → orange → rose → violet)."""
+    k = size / 64
+    return f"""<g transform="translate({x} {y}) scale({k})">
+  <defs><radialGradient id="igr" cx=".3" cy="1.07" r="1.3">
+    <stop offset="0" stop-color="#fdf497"/><stop offset=".08" stop-color="#fdf497"/><stop offset=".45" stop-color="#fd5949"/>
+    <stop offset=".6" stop-color="#d6249f"/><stop offset=".9" stop-color="#285aeb"/></radialGradient></defs>
+  <rect width="64" height="64" rx="16" fill="url(#igr)"/>
+  <rect x="15" y="15" width="34" height="34" rx="10" fill="none" stroke="#fff" stroke-width="4.5"/>
+  <circle cx="32" cy="32" r="8" fill="none" stroke="#fff" stroke-width="4.5"/>
+  <circle cx="42" cy="22" r="2.6" fill="#fff"/>
+</g>"""
+
+
+def icon_linkedin(x, y, size=48):
+    """Logo LinkedIn avec sa vraie couleur (bleu LinkedIn, « in » blanc)."""
+    k = size / 64
+    return f"""<g transform="translate({x} {y}) scale({k})">
+  <rect width="64" height="64" rx="12" fill="#0a66c2"/>
+  <rect x="15" y="27" width="7.5" height="22" rx="1.5" fill="#fff"/>
+  <circle cx="18.75" cy="18.5" r="4.6" fill="#fff"/>
+  <path d="M28,27 h7 v3.4 C36.6,27.9 39.4,26.4 43,26.4 C48.6,26.4 51,30 51,36.2 V49 h-7.5 V37.6 C43.5,34.4 42.4,32.7 39.8,32.7 C37,32.7 35.5,34.6 35.5,37.8 V49 H28 Z" fill="#fff"/>
+</g>"""
+
+
+SOCIAL_ICONS = {"instagram": icon_instagram, "linkedin": icon_linkedin}
+
+
+def social_card(i, slug, reseau, pseudo):
+    """Juste le logo du réseau (le lien est mis dans le README), qui apparaît
+    en sortant doucement, l'un après l'autre."""
+    delay = 5.6 + i * 0.15
+    size = 56
+    body = f'<g class="bp" style="animation-delay:{delay:.2f}s;transform-origin:center">{SOCIAL_ICONS[slug](0, 0, size)}</g>'
+    write(f"social-{slug}.svg", svg(size, size, body, [], f"{reseau.title()} : {pseudo}", bottom=0))
 
 
 # ---- 5 · blue contribution graph -----------------------------------------------
@@ -1302,4 +1347,6 @@ if __name__ == "__main__":
         repo_card(i, name, desc, lang, color, stars.get(name))
     section_title("Mes", "codes", "dark")
     section_title("Mes", "codes", "light")
+    for i, (slug, reseau, pseudo, _lien) in enumerate(RESEAUX):
+        social_card(i, slug, reseau, pseudo)
     heatmap(data)
