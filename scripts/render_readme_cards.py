@@ -799,10 +799,7 @@ def fx_cendres_glitch(rows, top, bot, t_art=1.1):
         vals, kts = _bursts(P, bursts, ["0 0"] + [f"{x} 0" for x in d])
         out.append(f'<g>{"".join(cols)}<animateTransform attributeName="transform" type="translate" '
                    f'values="{vals}" keyTimes="{kts}" dur="{P}s" repeatCount="indefinite"/></g>')
-    # (reflet rouge retiré à la demande de l'utilisateur)
-    fv, fkt = _bursts(P, bursts, ["0", ".12", "0", ".08"])
-    out.append(f'<rect x="20" y="{top:.0f}" width="800" height="{bot - top:.0f}" fill="#ff4f3d" opacity="0">'
-               f'<animate attributeName="opacity" values="{fv}" keyTimes="{fkt}" dur="{P}s" repeatCount="indefinite"/></rect>')
+    # (reflet rouge et flash rouge en cadre retirés à la demande de l'utilisateur)
     # poussière : n'apparaît qu'au moment où le portrait s'envole
     for _ in range(90):
         x, y = 20 + rnd.random() * 800, top + rnd.random() * (bot - top)
