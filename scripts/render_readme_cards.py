@@ -36,6 +36,10 @@ CHASSEUR = "bonhomme"
 # effet sur le portrait du terminal : "aucun", "cendres", "hash", "matrix", "glitch"
 #   ou "cendres+glitch" (le mélange)
 EFFET = "cendres+glitch"
+# apparition du portrait : "decodage" (chaque ligne s'écrit d'abord en 0, 1 et #
+#   puis se décode en dessin) ou "simple" (fondu ligne par ligne)
+APPARITION = "decodage"
+DEC_IMAGES, DEC_PAS = 5, .18       # nb d'images brouillées par ligne, durée de chacune (s)
 # barres des 12 mois : "une-a-une" (chaque barre monte avec un rebond + son chiffre)
 #   ou "ensemble" (toutes montent presque en même temps, l'ancienne version)
 BARRES = "une-a-une"
@@ -619,6 +623,29 @@ def _rows_svg(rows, cls=True, t_art=1.1):
     return out
 
 
+def decode_intro(rows, t_art):
+    """Avant chaque ligne du portrait : quelques images de 0, 1 et # qui
+    clignotent à la place des caractères (même silhouette), puis s'effacent
+    pile quand la vraie ligne apparaît. Joué une seule fois."""
+    import random, html as _h
+    rnd = random.Random(11)
+    pool = "0101010101##"
+    out = ['<style>@keyframes dec{0%,100%{opacity:0}12%,88%{opacity:1}}'
+           f'.dc{{opacity:0;animation:dec {DEC_PAS:.2f}s linear both}}</style>']
+    for i, (y, txt) in enumerate(rows):
+        raw = _h.unescape(txt)
+        if not raw.strip():
+            continue
+        t0 = t_art + i * 0.02
+        for k in range(DEC_IMAGES):
+            scr = "".join(c if c == " " else rnd.choice(pool) for c in raw)
+            col = "#d6ffe9" if k == DEC_IMAGES - 1 else ("#8ff3c6" if k % 2 == 0 else MQ_G)
+            out.append(f'<text class="dc" style="animation-delay:{t0 + k * DEC_PAS:.3f}s" xml:space="preserve" '
+                       f'x="20" y="{y}" font-size="7.2" textLength="800" lengthAdjust="spacing" '
+                       f'fill="{col}">{_h.escape(scr)}</text>')
+    return "".join(out)
+
+
 def fx_cendres(rows, top, bot):
     """Le portrait part en poussière vers la droite, puis se reforme (boucle de 10 s)."""
     import random
@@ -833,10 +860,14 @@ def portrait_panel():
     h = st_y + 46
     mono = "ui-monospace, SFMono-Regular, Menlo, Consolas, monospace"
     t_cmd, t_art = 0.3, 1.1                    # début de la frappe, début du portrait
+    intro = ""
+    if APPARITION == "decodage":
+        intro = decode_intro(rows, t_art)
+        t_art += DEC_IMAGES * DEC_PAS          # la vraie ligne arrive après le brouillage
     fx = {"cendres": fx_cendres, "hash": fx_hash, "matrix": fx_matrix, "glitch": fx_glitch,
           "cendres+glitch": fx_cendres_glitch}.get(EFFET)
-    lines = (fx_cendres_glitch(rows, top, bot, t_art) if EFFET == "cendres+glitch"
-             else fx(rows, top, bot) if fx else "".join(_rows_svg(rows, t_art=t_art)))
+    lines = intro + (fx_cendres_glitch(rows, top, bot, t_art) if EFFET == "cendres+glitch"
+                     else fx(rows, top, bot) if fx else "".join(_rows_svg(rows, t_art=t_art)))
     t_who = t_art + len(rows) * 0.02 + 0.3
     dots = "".join(f'<circle cx="{24 + k * 18}" cy="{TB / 2}" r="5.5" fill="{c}"/>'
                    for k, c in enumerate(["#ff5f56", "#ffbd2e", "#27c93f"]))
